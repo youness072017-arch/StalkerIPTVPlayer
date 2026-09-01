@@ -1,3 +1,3 @@
 #!/usr/bin/env sh
-exec gradle "$@"
-
+gradle wrapper --gradle-version 8.2
+exec ./gradlew "$@"
