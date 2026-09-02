@@ -1,59 +1,30 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#1b1429"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="24dp">
+package com.stalker.iptvplayer
 
-    <!-- عنوان التطبيق -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="32dp"
-        android:text="VU IPTV Player - Login"
-        android:textColor="#FFFFFF"
-        android:textSize="24sp"
-        android:textStyle="bold" />
+import android.os.Bundle
+import android.widget.Button
+import android.widget.EditText
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 
-    <!-- خانة إدخال رابط البورتال -->
-    <EditText
-        android:id="@+id/et_portal_url"
-        android:layout_width="match_parent"
-        android:layout_height="50dp"
-        android:layout_marginBottom="16dp"
-        android:background="#2d2442"
-        android:hint="Enter Portal URL (e.g. http://portal.com)"
-        android:inputType="textUri"
-        android:padding="12dp"
-        android:textColor="#FFFFFF"
-        android:textColorHint="#A0A0A0"
-        android:textSize="14sp" />
+class MainActivity : AppCompatActivity() {
 
-    <!-- خانة إدخال MAC Address -->
-    <EditText
-        android:id="@+id/et_mac_address"
-        android:layout_width="match_parent"
-        android:layout_height="50dp"
-        android:layout_marginBottom="24dp"
-        android:background="#2d2442"
-        android:hint="Enter MAC Address (e.g. 00:1A:79:...)"
-        android:inputType="text"
-        android:padding="12dp"
-        android:textColor="#FFFFFF"
-        android:textColorHint="#A0A0A0"
-        android:textSize="14sp" />
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
 
-    <!-- زر الربط والدخول -->
-    <Button
-        android:id="@+id/btn_connect"
-        android:layout_width="match_parent"
-        android:layout_height="55dp"
-        android:backgroundTint="#00b4d8"
-        android:text="Connect"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:textStyle="bold" />
+        val etPortalUrl = findViewById<EditText>(R.id.et_portal_url)
+        val etMacAddress = findViewById<EditText>(R.id.et_mac_address)
+        val btnConnect = findViewById<Button>(R.id.btn_connect)
 
-</LinearLayout>
+        btnConnect.setOnClickListener {
+            val portalUrl = etPortalUrl.text.toString().trim()
+            val macAddress = etMacAddress.text.toString().trim()
+
+            if (portalUrl.isEmpty() || macAddress.isEmpty()) {
+                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Connecting to Portal...", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+}
