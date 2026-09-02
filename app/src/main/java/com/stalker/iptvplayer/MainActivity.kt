@@ -1,5 +1,6 @@
 package com.stalker.iptvplayer
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
@@ -23,7 +24,12 @@ class MainActivity : AppCompatActivity() {
             if (portalUrl.isEmpty() || macAddress.isEmpty()) {
                 Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "Connecting to Portal...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Connected Successfully!", Toast.LENGTH_SHORT).show()
+                
+                // الانتقال للواجهة الرئيسية (Dashboard)
+                val intent = Intent(this, DashboardActivity::class.java)
+                startActivity(intent)
+                finish()
             }
         }
     }
