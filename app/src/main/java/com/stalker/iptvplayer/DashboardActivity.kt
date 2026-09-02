@@ -22,26 +22,26 @@ class DashboardActivity : AppCompatActivity() {
 
         btnLiveTv.setOnClickListener {
             if (portalUrl.isEmpty() || macAddress.isEmpty()) {
-                Toast.makeText(this, "No portal or MAC address provided!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Missing portal details. Please re-login.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
-            Toast.makeText(this, "Connecting to Stalker Portal...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Connecting to portal...", Toast.LENGTH_SHORT).show()
 
             val client = StalkerClient()
-            client.authenticateAndFetchChannels(portalUrl, macAddress) { result ->
+            client.authenticateAndFetchChannels(portalUrl, macAddress) { success, message ->
                 runOnUiThread {
-                    Toast.makeText(this, result, Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
                 }
             }
         }
 
         btnMovies.setOnClickListener {
-            Toast.makeText(this, "Movies clicked", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "VOD Movies module loading...", Toast.LENGTH_SHORT).show()
         }
 
         btnSeries.setOnClickListener {
-            Toast.makeText(this, "Series clicked", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Series module loading...", Toast.LENGTH_SHORT).show()
         }
 
         btnSettings.setOnClickListener {
