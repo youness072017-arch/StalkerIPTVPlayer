@@ -1,43 +1,30 @@
 package com.stalker.iptvplayer
 
 import android.os.Bundle
+import android.widget.Button
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 
 class MainActivity : AppCompatActivity() {
-    private var player: ExoPlayer? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-    }
 
-    override fun onStart() {
-        super.onStart()
-        initializePlayer()
-    }
+        val btnLiveTv = findViewById<Button>(R.id.btn_live_tv)
+        val btnMovies = findViewById<Button>(R.id.btn_movies)
+        val btnSeries = findViewById<Button>(R.id.btn_series)
 
-    override fun onStop() {
-        super.onStop()
-        releasePlayer()
-    }
-
-    private fun initializePlayer() {
-        player = ExoPlayer.Builder(this).build().also { exoPlayer ->
-            val playerView = findViewById<PlayerView>(R.id.player_view)
-            playerView.player = exoPlayer
-
-            val mediaItem = MediaItem.fromUri("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
-            exoPlayer.setMediaItem(mediaItem)
-            exoPlayer.prepare()
-            exoPlayer.play()
+        btnLiveTv.setOnClickListener {
+            Toast.makeText(this, "Live TV clicked", Toast.LENGTH_SHORT).show()
         }
-    }
 
-    private fun releasePlayer() {
-        player?.release()
-        player = null
+        btnMovies.setOnClickListener {
+            Toast.makeText(this, "Movies clicked", Toast.LENGTH_SHORT).show()
+        }
+
+        btnSeries.setOnClickListener {
+            Toast.makeText(this, "Series clicked", Toast.LENGTH_SHORT).show()
+        }
     }
 }
