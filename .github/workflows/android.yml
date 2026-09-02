@@ -25,7 +25,7 @@ jobs:
         gradle-version: '8.7'
 
     - name: Build APK
-      run: gradle assembleDebug --warning-mode all
+      run: gradle assembleDebug -Dorg.gradle.warning.mode=all
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
