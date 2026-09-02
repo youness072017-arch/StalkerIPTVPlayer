@@ -2,11 +2,63 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="#1b1429"
+    android:padding="24dp">
 
-    <androidx.media3.ui.PlayerView
-        android:id="@+id/player_view"
+    <!-- العنوان والشعار لفوق -->
+    <TextView
+        android:id="@+id/app_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="IPTV Player"
+        android:textColor="#FFFFFF"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <!-- الأزرار الرئيسية في الوسط (Live TV, Movies, Series) -->
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <!-- Live TV -->
+        <Button
+            android:id="@+id/btn_live_tv"
+            android:layout_width="160dp"
+            android:layout_height="120dp"
+            android:layout_margin="12dp"
+            android:backgroundTint="#00b4d8"
+            android:text="Live TV"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- Movies -->
+        <Button
+            android:id="@+id/btn_movies"
+            android:layout_width="160dp"
+            android:layout_height="120dp"
+            android:layout_margin="12dp"
+            android:backgroundTint="#7b2cbf"
+            android:text="Movies"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- Series -->
+        <Button
+            android:id="@+id/btn_series"
+            android:layout_width="160dp"
+            android:layout_height="120dp"
+            android:layout_margin="12dp"
+            android:backgroundTint="#f77f00"
+            android:text="Series"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
 
 </RelativeLayout>
