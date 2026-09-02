@@ -9,17 +9,28 @@ class StalkerClient {
     fun authenticateAndFetchChannels(portalUrl: String, macAddress: String, onResult: (String) -> Unit) {
         Thread {
             try {
-                // طريقة الاتصال ببوابة Stalker (Handshake / MAC Authentication)
-                val handshakeUrl = "$portalUrl/stalker_portal/server/load.php?type=itv&action=handshake&mac=$macAddress"
-                val url = URL(handshakeUrl)
+                // تنظيف الرابط من أي شرطة مائلة في الأخير لضمان سلامة المسار
+                val cleanUrl = portalUrl.removeSuffix("/")
+                
+                // تجربة مسار الاتصال الخاص بـ Stalker / Ministra
+                val targetUrl = if (cleanUrl.contains("/c/") || cleanUrl.contains("load.php")) {
+                    cleanUrl
+                } else {
+                    "$cleanUrl/stalker_portal/server/load.php?type=itv&action=handshake"
+                }
+
+                val url = URL(targetUrl)
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
                 connection.setRequestProperty("User-Agent", "Mozilla/5.0 (QtEmbedded; U; Linux; C)")
-                
+                connection.setRequestProperty("Cookie", "mac=$macAddress")
+                connection.connectTimeout = 10000
+                connection.readTimeout = 10000
+
                 val responseCode = connection.responseCode
                 if (responseCode == 200) {
                     val response = connection.inputStream.bufferedReader().use { it.readText() }
-                    onResult("Connected! Data received successfully.")
+                    onResult("Success! Connected to Portal.")
                 } else {
                     onResult("Failed: Server responded with code $responseCode")
                 }
