@@ -12,7 +12,6 @@ class DashboardActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_dashboard)
 
-        // استقبال البيانات المرسلة من MainActivity
         val portalUrl = intent.getStringExtra("PORTAL_URL") ?: ""
         val macAddress = intent.getStringExtra("MAC_ADDRESS") ?: ""
 
@@ -27,7 +26,6 @@ class DashboardActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            Toast.init
             Toast.makeText(this, "Connecting to Stalker Portal...", Toast.LENGTH_SHORT).show()
 
             val client = StalkerClient()
