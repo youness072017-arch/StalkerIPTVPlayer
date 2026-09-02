@@ -1,64 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#1b1429"
+    android:gravity="center"
+    android:orientation="vertical"
     android:padding="24dp">
 
-    <!-- العنوان والشعار لفوق -->
+    <!-- عنوان التطبيق -->
     <TextView
-        android:id="@+id/app_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="IPTV Player"
+        android:layout_marginBottom="32dp"
+        android:text="VU IPTV Player - Login"
         android:textColor="#FFFFFF"
-        android:textSize="22sp"
+        android:textSize="24sp"
         android:textStyle="bold" />
 
-    <!-- الأزرار الرئيسية في الوسط (Live TV, Movies, Series) -->
-    <LinearLayout
+    <!-- خانة إدخال رابط البورتال -->
+    <EditText
+        android:id="@+id/et_portal_url"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_centerInParent="true"
-        android:gravity="center"
-        android:orientation="horizontal">
+        android:layout_height="50dp"
+        android:layout_marginBottom="16dp"
+        android:background="#2d2442"
+        android:hint="Enter Portal URL (e.g. http://portal.com)"
+        android:inputType="textUri"
+        android:padding="12dp"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#A0A0A0"
+        android:textSize="14sp" />
 
-        <!-- Live TV -->
-        <Button
-            android:id="@+id/btn_live_tv"
-            android:layout_width="160dp"
-            android:layout_height="120dp"
-            android:layout_margin="12dp"
-            android:backgroundTint="#00b4d8"
-            android:text="Live TV"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+    <!-- خانة إدخال MAC Address -->
+    <EditText
+        android:id="@+id/et_mac_address"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:layout_marginBottom="24dp"
+        android:background="#2d2442"
+        android:hint="Enter MAC Address (e.g. 00:1A:79:...)"
+        android:inputType="text"
+        android:padding="12dp"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#A0A0A0"
+        android:textSize="14sp" />
 
-        <!-- Movies -->
-        <Button
-            android:id="@+id/btn_movies"
-            android:layout_width="160dp"
-            android:layout_height="120dp"
-            android:layout_margin="12dp"
-            android:backgroundTint="#7b2cbf"
-            android:text="Movies"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+    <!-- زر الربط والدخول -->
+    <Button
+        android:id="@+id/btn_connect"
+        android:layout_width="match_parent"
+        android:layout_height="55dp"
+        android:backgroundTint="#00b4d8"
+        android:text="Connect"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold" />
 
-        <!-- Series -->
-        <Button
-            android:id="@+id/btn_series"
-            android:layout_width="160dp"
-            android:layout_height="120dp"
-            android:layout_margin="12dp"
-            android:backgroundTint="#f77f00"
-            android:text="Series"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-    </LinearLayout>
-
-</RelativeLayout>
+</LinearLayout>
