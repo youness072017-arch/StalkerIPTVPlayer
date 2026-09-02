@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#1b1429"
+    android:padding="24dp">
+
+    <!-- العنوان وزر الإعدادات لفوق -->
+    <LinearLayout
+        android:id="@+id/top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="VU IPTV Player"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <!-- زر الإعدادات (Settings) بحال VU IPTV Player -->
+        <Button
+            android:id="@+id/btn_settings"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:backgroundTint="#2d2442"
+            android:text="⚙ Settings"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <!-- الأزرار الرئيسية في الوسط -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <!-- Live TV -->
+        <Button
+            android:id="@+id/btn_live_tv"
+            android:layout_width="140dp"
+            android:layout_height="110dp"
+            android:layout_margin="8dp"
+            android:backgroundTint="#00b4d8"
+            android:text="Live TV"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <!-- Movies -->
+        <Button
+            android:id="@+id/btn_movies"
+            android:layout_width="140dp"
+            android:layout_height="110dp"
+            android:layout_margin="8dp"
+            android:backgroundTint="#7b2cbf"
+            android:text="Movies"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <!-- Series -->
+        <Button
+            android:id="@+id/btn_series"
+            android:layout_width="140dp"
+            android:layout_height="110dp"
+            android:layout_margin="8dp"
+            android:backgroundTint="#f77f00"
+            android:text="Series"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+</RelativeLayout>
