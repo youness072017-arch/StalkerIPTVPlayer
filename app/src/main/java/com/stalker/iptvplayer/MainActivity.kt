@@ -22,12 +22,12 @@ class MainActivity : AppCompatActivity() {
             val macAddress = etMacAddress.text.toString().trim()
 
             if (portalUrl.isEmpty() || macAddress.isEmpty()) {
-                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Please fill all fields", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "Connected Successfully!", Toast.LENGTH_SHORT).show()
-                
-                // الانتقال للواجهة الرئيسية (Dashboard)
-                val intent = Intent(this, DashboardActivity::class.java)
+                val intent = Intent(this, DashboardActivity::class.java).apply {
+                    putExtra("PORTAL_URL", portalUrl)
+                    putExtra("MAC_ADDRESS", macAddress)
+                }
                 startActivity(intent)
                 finish()
             }
