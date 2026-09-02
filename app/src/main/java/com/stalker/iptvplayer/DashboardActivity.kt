@@ -12,18 +12,24 @@ class DashboardActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_dashboard)
 
+        // استقبال البيانات المرسلة من MainActivity
+        val portalUrl = intent.getStringExtra("PORTAL_URL") ?: ""
+        val macAddress = intent.getStringExtra("MAC_ADDRESS") ?: ""
+
         val btnLiveTv = findViewById<Button>(R.id.btn_live_tv)
         val btnMovies = findViewById<Button>(R.id.btn_movies)
         val btnSeries = findViewById<Button>(R.id.btn_series)
         val btnSettings = findViewById<Button>(R.id.btn_settings)
 
-        // الاتصال بسيرفر Stalker وجلب القنوات عند الضغط على Live TV
         btnLiveTv.setOnClickListener {
+            if (portalUrl.isEmpty() || macAddress.isEmpty()) {
+                Toast.makeText(this, "No portal or MAC address provided!", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+
+            Toast.init
             Toast.makeText(this, "Connecting to Stalker Portal...", Toast.LENGTH_SHORT).show()
-            
-            val portalUrl = "http://portal.example.com" // رابط البورتال (يمكنك تعديله لاحقاً ليأخذ ما كتبه المستخدم)
-            val macAddress = "00:1A:79:00:00:00" // الـ MAC Address
-            
+
             val client = StalkerClient()
             client.authenticateAndFetchChannels(portalUrl, macAddress) { result ->
                 runOnUiThread {
