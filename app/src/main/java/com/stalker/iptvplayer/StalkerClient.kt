@@ -6,13 +6,10 @@ import java.net.URL
 
 class StalkerClient {
 
-    fun authenticateAndFetchChannels(portalUrl: String, macAddress: String, onResult: (String) -> Unit) {
+    fun authenticateAndFetchChannels(portalUrl: String, macAddress: String, onResult: (Boolean, String) -> Unit) {
         Thread {
             try {
-                // تنظيف الرابط من أي شرطة مائلة في الأخير لضمان سلامة المسار
                 val cleanUrl = portalUrl.removeSuffix("/")
-                
-                // تجربة مسار الاتصال الخاص بـ Stalker / Ministra
                 val targetUrl = if (cleanUrl.contains("/c/") || cleanUrl.contains("load.php")) {
                     cleanUrl
                 } else {
@@ -24,19 +21,19 @@ class StalkerClient {
                 connection.requestMethod = "GET"
                 connection.setRequestProperty("User-Agent", "Mozilla/5.0 (QtEmbedded; U; Linux; C)")
                 connection.setRequestProperty("Cookie", "mac=$macAddress")
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
+                connection.connectTimeout = 12000
+                connection.readTimeout = 12000
 
                 val responseCode = connection.responseCode
                 if (responseCode == 200) {
                     val response = connection.inputStream.bufferedReader().use { it.readText() }
-                    onResult("Success! Connected to Portal.")
+                    onResult(true, "Connected Successfully!")
                 } else {
-                    onResult("Failed: Server responded with code $responseCode")
+                    onResult(false, "Server Error: Code $responseCode")
                 }
             } catch (e: Exception) {
-                Log.e("StalkerClient", "Error connecting to portal", e)
-                onResult("Error: ${e.localizedMessage}")
+                Log.e("StalkerClient", "Connection Exception", e)
+                onResult(false, "Connection Failed: ${e.localizedMessage}")
             }
         }.start()
     }
