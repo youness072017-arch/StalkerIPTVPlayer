@@ -17,8 +17,19 @@ class DashboardActivity : AppCompatActivity() {
         val btnSeries = findViewById<Button>(R.id.btn_series)
         val btnSettings = findViewById<Button>(R.id.btn_settings)
 
+        // الاتصال بسيرفر Stalker وجلب القنوات عند الضغط على Live TV
         btnLiveTv.setOnClickListener {
-            Toast.makeText(this, "Live TV clicked", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Connecting to Stalker Portal...", Toast.LENGTH_SHORT).show()
+            
+            val portalUrl = "http://portal.example.com" // رابط البورتال (يمكنك تعديله لاحقاً ليأخذ ما كتبه المستخدم)
+            val macAddress = "00:1A:79:00:00:00" // الـ MAC Address
+            
+            val client = StalkerClient()
+            client.authenticateAndFetchChannels(portalUrl, macAddress) { result ->
+                runOnUiThread {
+                    Toast.makeText(this, result, Toast.LENGTH_LONG).show()
+                }
+            }
         }
 
         btnMovies.setOnClickListener {
@@ -29,7 +40,6 @@ class DashboardActivity : AppCompatActivity() {
             Toast.makeText(this, "Series clicked", Toast.LENGTH_SHORT).show()
         }
 
-        // زر الإعدادات كيرجعك لصفحة تسجيل الدخول باش تغير الماك أدرس
         btnSettings.setOnClickListener {
             val intent = Intent(this, MainActivity::class.java)
             startActivity(intent)
