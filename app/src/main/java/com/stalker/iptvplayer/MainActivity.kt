@@ -2,6 +2,7 @@ package com.stalker.iptvplayer
 
 import android.os.Bundle
 import android.widget.Button
+import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
@@ -11,20 +12,19 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val btnLiveTv = findViewById<Button>(R.id.btn_live_tv)
-        val btnMovies = findViewById<Button>(R.id.btn_movies)
-        val btnSeries = findViewById<Button>(R.id.btn_series)
+        val etPortalUrl = findViewById<EditText>(R.id.et_portal_url)
+        val etMacAddress = findViewById<EditText>(R.id.et_mac_address)
+        val btnConnect = findViewById<Button>(R.id.btn_connect)
 
-        btnLiveTv.setOnClickListener {
-            Toast.makeText(this, "Live TV clicked", Toast.LENGTH_SHORT).show()
-        }
+        btnConnect.setOnClickListener {
+            val portalUrl = etPortalUrl.text.toString().trim()
+            val macAddress = etMacAddress.text.toString().trim()
 
-        btnMovies.setOnClickListener {
-            Toast.makeText(this, "Movies clicked", Toast.LENGTH_SHORT).show()
-        }
-
-        btnSeries.setOnClickListener {
-            Toast.makeText(this, "Series clicked", Toast.LENGTH_SHORT).show()
+            if (portalUrl.isEmpty() || macAddress.isEmpty()) {
+                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Connecting to Portal...", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }
