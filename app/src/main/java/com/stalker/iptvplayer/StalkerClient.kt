@@ -1,112 +1,791 @@
-1m 57s
-Run gradle assembleDebug -Dorg.gradle.warning.mode=all
+package com.stalker.iptvplayer
 
-Welcome to Gradle 8.7!
+import android.util.Log
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+import java.util.Locale
 
-Here are the highlights of this release:
- - Compiling and testing with Java 22
- - Cacheable Groovy script compilation
- - New methods in lazy collection properties
+class StalkerClient {
 
-For more details see https://docs.gradle.org/8.7/release-notes.html
+    companion object {
+        private const val TAG = "StalkerClient"
+        private const val CONNECT_TIMEOUT = 15000
+        private const val READ_TIMEOUT = 20000
 
-Starting a Gradle Daemon (subsequent builds will be faster)
+        private const val USER_AGENT =
+            "Mozilla/5.0 (QtEmbedded; U; Linux; C) " +
+                    "AppleWebKit/533.3 (KHTML, like Gecko) " +
+                    "MAG250 stbapp ver: 2 rev: 250 Safari/533.3"
 
-> Configure project :app
-Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/8.7/userguide/upgrading_version_8.html#declaring_client_module_dependencies
-The org.gradle.api.plugins.Convention type has been deprecated. This is scheduled to be removed in Gradle 9.0. Consult the upgrading guide for further information: https://docs.gradle.org/8.7/userguide/upgrading_version_8.html#deprecated_access_to_conventions
-Checking the license for package Android SDK Build-Tools 33.0.1 in /usr/local/lib/android/sdk/licenses
-License for package Android SDK Build-Tools 33.0.1 accepted.
-Preparing "Install Android SDK Build-Tools 33.0.1 v.33.0.1".
-"Install Android SDK Build-Tools 33.0.1 v.33.0.1" ready.
-Installing Android SDK Build-Tools 33.0.1 in /usr/local/lib/android/sdk/build-tools/33.0.1
-"Install Android SDK Build-Tools 33.0.1 v.33.0.1" complete.
-"Install Android SDK Build-Tools 33.0.1 v.33.0.1" finished.
+        private const val X_USER_AGENT = "Model: MAG250; Link: WiFi"
+    }
 
-> Task :app:preBuild UP-TO-DATE
-> Task :app:preDebugBuild UP-TO-DATE
-> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+    data class Channel(
+        val id: String,
+        val name: String,
+        val logo: String = "",
+        val cmd: String = "",
+        val categoryId: String = "",
+        val categoryName: String = ""
+    )
 
-> Task :app:checkDebugAarMetadata
-WARNING: [Processor] Library '/home/runner/.gradle/caches/modules-2/files-2.1/androidx.media3/media3-ui/1.2.1/8794bbc81c7dd40754e9539fcdda1ba5c999e29b/media3-ui-1.2.1.aar' contains references to both AndroidX and old support library. This seems like the library is partially migrated. Jetifier will try to rewrite the library anyway.
- Example of androidX reference: 'androidx/media3/ui/PlayerNotificationManager'
- Example of support library reference: 'android/support/v4/media/session/MediaSessionCompat$Token'
+    private data class Session(
+        val token: String,
+        val random: String,
+        val loadUrl: String
+    )
 
-> Task :app:generateDebugResValues
-> Task :app:mapDebugSourceSetPaths
-> Task :app:generateDebugResources
-> Task :app:packageDebugResources
-> Task :app:createDebugCompatibleScreenManifests
-> Task :app:extractDeepLinksDebug
-> Task :app:mergeDebugResources
-> Task :app:parseDebugLocalResources
-> Task :app:processDebugMainManifest
-> Task :app:processDebugManifest
-> Task :app:javaPreCompileDebug
-> Task :app:mergeDebugShaders
-> Task :app:compileDebugShaders NO-SOURCE
-> Task :app:generateDebugAssets UP-TO-DATE
-> Task :app:mergeDebugAssets
-> Task :app:compressDebugAssets
-> Task :app:desugarDebugFileDependencies
-> Task :app:mergeDebugJniLibFolders
-> Task :app:processDebugManifestForPackage
-> Task :app:checkDebugDuplicateClasses
-> Task :app:processDebugResources
-> Task :app:mergeExtDexDebug
-> Task :app:mergeLibDexDebug
-> Task :app:mergeDebugNativeLibs NO-SOURCE
-> Task :app:stripDebugDebugSymbols NO-SOURCE
-> Task :app:validateSigningDebug
-> Task :app:writeDebugAppMetadata
-> Task :app:writeDebugSigningConfigVersions
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:761:48 Expecting an expression
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:761:48 Expecting '}'
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:761:48 Expecting 'catch' or 'finally'
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:761:48 Missing '}
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:93:21 Unresolved reference: finish
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:102:21 Unresolved reference: finish
+    fun authenticateAndFetchChannels(
+        portalUrl: String,
+        macAddress: String,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        Thread {
+            try {
+                val portal = normalizePortalUrl(portalUrl)
+                val mac = normalizeMac(macAddress)
 
-> Task :app:compileDebugKotlin FAILED
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:193:21 Unresolved reference: finish
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:219:17 Unresolved reference: finish
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:233:17 Unresolved reference: finish
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:577:28 Unresolved reference: parseString
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:636:24 Unresolved reference: parseString
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:696:28 Unresolved reference: parseString
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:708:20 Unresolved reference: has
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:712:26 Unresolved reference: isJsonArray
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:714:26 Unresolved reference: asJsonArray
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:714:38 Overload resolution ambiguity: 
-public inline fun <T> Iterable<TypeVariable(T)>.forEach(action: (TypeVariable(T)) -> Unit): Unit defined in kotlin.collections
-public inline fun <K, V> Map<out TypeVariable(K), TypeVariable(V)>.forEach(action: (Map.Entry<TypeVariable(K), TypeVariable(V)>) -> Unit): Unit defined in kotlin.collections
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:714:48 Cannot infer a type for this parameter. Please specify it explicitly.
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:724:29 Unresolved reference: parseChannelObject
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:731:33 Unresolved reference: isJsonObject
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:734:25 Unresolved reference: parseChannelObject
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:735:34 Unresolved reference: asJsonObject
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:747:40 Unresolved reference: has
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:752:29 Unresolved reference: isJsonArray
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:754:29 Unresolved reference: asJsonArray
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:754:41 Overload resolution ambiguity: 
-public inline fun <T> Iterable<TypeVariable(T)>.forEach(action: (TypeVariable(T)) -> Unit): Unit defined in kotlin.collections
-public inline fun <K, V> Map<out TypeVariable(K), TypeVariable(V)>.forEach(action: (Map.Entry<TypeVariable(K), TypeVariable(V)>) -> Unit): Unit defined in kotlin.collections
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:754:51 Cannot infer a type for this parameter. Please specify it explicitly.
-e: file:///home/runner/work/StalkerIPTVPlayer/StalkerIPTVPlayer/app/src/main/java/com/stalker/iptvplayer/StalkerClient.kt:761:29 Unresolved reference: parseChannelObject
+                if (portal.isEmpty()) {
+                    finish(onResult, false, "Portal URL is empty or invalid.")
+                    return@Thread
+                }
 
-25 actionable tasks: 25 executed
-FAILURE: Build failed with an exception.
+                if (!isValidMac(mac)) {
+                    finish(onResult, false, "Invalid MAC address.")
+                    return@Thread
+                }
 
-* What went wrong:
-Execution failed for task ':app:compileDebugKotlin'.
-> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
-   > Compilation error. See log for more details
+                Log.d(TAG, "Portal: $portal")
+                Log.d(TAG, "MAC: $mac")
 
-* Try:
-> Run with --stacktrace option to get the stack trace.
-> Run with --info or --debug option to get more log output.
-> Run with --scan to get full insights.
-> Get more help at https://help.gradle.org.
+                val loadUrl = discoverLoadUrl(portal, mac)
 
-BUILD FAILED in 1m 56s
-Error: Process completed with exit code 1.
+                if (loadUrl.isEmpty()) {
+                    finish(
+                        onResult,
+                        false,
+                        "Could not find a compatible Stalker portal endpoint."
+                    )
+                    return@Thread
+                }
+
+                val session = performHandshake(
+                    loadUrl = loadUrl,
+                    macAddress = mac
+                )
+
+                Log.d(TAG, "Handshake successful")
+
+                try {
+                    getProfile(
+                        session = session,
+                        macAddress = mac
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Profile request failed: ${e.message}")
+                }
+
+                try {
+                    request(
+                        loadUrl = session.loadUrl,
+                        params = mapOf(
+                            "type" to "itv",
+                            "action" to "get_genres",
+                            "JsHttpRequest" to "1-xml"
+                        ),
+                        macAddress = mac,
+                        token = session.token
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Genres request failed: ${e.message}")
+                }
+
+                val channelsResponse = requestChannels(
+                    session = session,
+                    macAddress = mac
+                )
+
+                val channels = parseChannels(channelsResponse)
+
+                if (channels.isEmpty()) {
+                    finish(
+                        onResult,
+                        false,
+                        "Portal connected, but no Live TV channels were found."
+                    )
+                    return@Thread
+                }
+
+                Log.d(TAG, "Parsed ${channels.size} channels")
+
+                channels.take(20).forEachIndexed { index, channel ->
+                    Log.d(
+                        TAG,
+                        "Channel[$index]: ${channel.name} | id=${channel.id}"
+                    )
+                }
+
+                finish(
+                    onResult,
+                    true,
+                    "Connected successfully. ${channels.size} Live TV channels found."
+                )
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Stalker connection failed", e)
+
+                finish(
+                    onResult,
+                    false,
+                    e.message ?: "Unknown portal connection error."
+                )
+            }
+        }.start()
+    }
+
+    private fun discoverLoadUrl(
+        portal: String,
+        macAddress: String
+    ): String {
+
+        val base = normalizeBaseUrl(portal)
+
+        val candidates = linkedSetOf(
+            "$base/stalker_portal/server/load.php",
+            "$base/portal.php",
+            "$base/server/load.php"
+        )
+
+        for (candidate in candidates) {
+            try {
+                Log.d(TAG, "Testing endpoint: $candidate")
+
+                val response = request(
+                    loadUrl = candidate,
+                    params = mapOf(
+                        "type" to "stb",
+                        "action" to "handshake",
+                        "token" to "",
+                        "JsHttpRequest" to "1-xml"
+                    ),
+                    macAddress = macAddress,
+                    token = null
+                )
+
+                val root = JsonParser.parseString(response)
+
+                if (!root.isJsonObject) {
+                    continue
+                }
+
+                val json = root.asJsonObject
+
+                if (!json.has("js")) {
+                    continue
+                }
+
+                val js = json.get("js")
+
+                if (!js.isJsonObject) {
+                    continue
+                }
+
+                val token = getString(
+                    js.asJsonObject,
+                    "token"
+                )
+
+                if (token.isNotEmpty()) {
+                    Log.d(TAG, "Compatible endpoint: $candidate")
+                    return candidate
+                }
+
+            } catch (e: Exception) {
+                Log.w(
+                    TAG,
+                    "Endpoint failed: $candidate -> ${e.message}"
+                )
+            }
+        }
+
+        return ""
+    }
+
+    private fun normalizePortalUrl(
+        input: String
+    ): String {
+
+        var value = input.trim()
+
+        if (value.isEmpty()) {
+            return ""
+        }
+
+        if (!value.startsWith("http://", true) &&
+            !value.startsWith("https://", true)
+        ) {
+            value = "http://$value"
+        }
+
+        return normalizeBaseUrl(value)
+    }
+
+    private fun normalizeBaseUrl(
+        input: String
+    ): String {
+
+        var value = input.trim().removeSuffix("/")
+
+        val suffixes = listOf(
+            "/load.php",
+            "/server",
+            "/stalker_portal",
+            "/c"
+        )
+
+        var changed = true
+
+        while (changed) {
+            changed = false
+
+            for (suffix in suffixes) {
+                if (value.endsWith(suffix, true)) {
+                    value = value
+                        .dropLast(suffix.length)
+                        .removeSuffix("/")
+
+                    changed = true
+                    break
+                }
+            }
+        }
+
+        return value
+    }
+
+    private fun normalizeMac(
+        input: String
+    ): String {
+        return input
+            .trim()
+            .uppercase(Locale.US)
+    }
+
+    private fun isValidMac(
+        mac: String
+    ): Boolean {
+
+        return Regex(
+            "^([0-9A-F]{2}:){5}[0-9A-F]{2}$"
+        ).matches(mac)
+    }
+
+    private fun performHandshake(
+        loadUrl: String,
+        macAddress: String
+    ): Session {
+
+        val response = request(
+            loadUrl = loadUrl,
+            params = mapOf(
+                "type" to "stb",
+                "action" to "handshake",
+                "token" to "",
+                "JsHttpRequest" to "1-xml"
+            ),
+            macAddress = macAddress,
+            token = null
+        )
+
+        val root = JsonParser.parseString(response)
+
+        if (!root.isJsonObject) {
+            throw Exception("Handshake returned invalid JSON.")
+        }
+
+        val json = root.asJsonObject
+
+        if (!json.has("js") ||
+            !json.get("js").isJsonObject
+        ) {
+            throw Exception(
+                "Handshake response is missing 'js'."
+            )
+        }
+
+        val js = json
+            .get("js")
+            .asJsonObject
+
+        val token = getString(js, "token")
+
+        if (token.isEmpty()) {
+            throw Exception(
+                "Handshake failed: portal did not return a token."
+            )
+        }
+
+        val random = getString(js, "random")
+
+        return Session(
+            token = token,
+            random = random,
+            loadUrl = loadUrl
+        )
+    }
+
+    private fun getProfile(
+        session: Session,
+        macAddress: String
+    ): JsonObject {
+
+        val response = request(
+            loadUrl = session.loadUrl,
+            params = mapOf(
+                "type" to "stb",
+                "action" to "get_profile",
+                "hd" to "1",
+                "stb_type" to "MAG250",
+                "image_version" to "218",
+                "auth_second_step" to "0",
+                "client_type" to "STB",
+                "num_banks" to "1",
+                "not_valid_token" to "0",
+                "JsHttpRequest" to "1-xml"
+            ),
+            macAddress = macAddress,
+            token = session.token
+        )
+
+        val root = JsonParser.parseString(response)
+
+        if (!root.isJsonObject) {
+            throw Exception("Profile returned invalid JSON.")
+        }
+
+        val json = root.asJsonObject
+
+        if (!json.has("js") ||
+            !json.get("js").isJsonObject
+        ) {
+            throw Exception(
+                "Profile response is missing 'js'."
+            )
+        }
+
+        return json
+            .get("js")
+            .asJsonObject
+    }
+
+    private fun requestChannels(
+        session: Session,
+        macAddress: String
+    ): String {
+
+        return try {
+
+            request(
+                loadUrl = session.loadUrl,
+                params = mapOf(
+                    "type" to "itv",
+                    "action" to "get_all_channels",
+                    "JsHttpRequest" to "1-xml"
+                ),
+                macAddress = macAddress,
+                token = session.token
+            )
+
+        } catch (firstError: Exception) {
+
+            Log.w(
+                TAG,
+                "get_all_channels failed: ${firstError.message}"
+            )
+
+            request(
+                loadUrl = session.loadUrl,
+                params = mapOf(
+                    "type" to "itv",
+                    "action" to "get_channels",
+                    "JsHttpRequest" to "1-xml"
+                ),
+                macAddress = macAddress,
+                token = session.token
+            )
+        }
+    }
+
+    private fun request(
+        loadUrl: String,
+        params: Map<String, String>,
+        macAddress: String,
+        token: String?
+    ): String {
+
+        val query = buildQuery(params)
+
+        val finalUrl =
+            if (query.isEmpty()) {
+                loadUrl
+            } else {
+                "$loadUrl?$query"
+            }
+
+        Log.d(TAG, "Request: $finalUrl")
+
+        val connection =
+            URL(finalUrl).openConnection() as HttpURLConnection
+
+        try {
+            connection.requestMethod = "GET"
+            connection.instanceFollowRedirects = true
+            connection.connectTimeout = CONNECT_TIMEOUT
+            connection.readTimeout = READ_TIMEOUT
+            connection.useCaches = false
+
+            connection.setRequestProperty(
+                "User-Agent",
+                USER_AGENT
+            )
+
+            connection.setRequestProperty(
+                "X-User-Agent",
+                X_USER_AGENT
+            )
+
+            connection.setRequestProperty(
+                "Accept",
+                "application/json, text/javascript, */*; q=0.01"
+            )
+
+            connection.setRequestProperty(
+                "Referer",
+                buildReferer(loadUrl)
+            )
+
+            connection.setRequestProperty(
+                "Cookie",
+                "mac=$macAddress; stb_lang=en; timezone=Europe/Paris"
+            )
+
+            connection.setRequestProperty(
+                "Connection",
+                "Keep-Alive"
+            )
+
+            if (!token.isNullOrBlank()) {
+                connection.setRequestProperty(
+                    "Authorization",
+                    "Bearer $token"
+                )
+            }
+
+            val responseCode =
+                connection.responseCode
+
+            val stream =
+                if (responseCode in 200..299) {
+                    connection.inputStream
+                } else {
+                    connection.errorStream
+                }
+
+            val response =
+                stream?.let {
+                    BufferedReader(
+                        InputStreamReader(it)
+                    ).use { reader ->
+                        reader.readText()
+                    }
+                } ?: ""
+
+            Log.d(
+                TAG,
+                "HTTP $responseCode | ${response.take(500)}"
+            )
+
+            if (responseCode !in 200..299) {
+                throw Exception(
+                    "Portal returned HTTP $responseCode"
+                )
+            }
+
+            if (response.isBlank()) {
+                throw Exception(
+                    "Portal returned an empty response."
+                )
+            }
+
+            return response
+
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun buildReferer(
+        loadUrl: String
+    ): String {
+
+        return try {
+            val url = URL(loadUrl)
+
+            "${url.protocol}://${url.authority}/stalker_portal/c/"
+
+        } catch (_: Exception) {
+            loadUrl
+        }
+    }
+
+    private fun buildQuery(
+        params: Map<String, String>
+    ): String {
+
+        return params.entries.joinToString("&") { entry ->
+
+            val key =
+                URLEncoder.encode(
+                    entry.key,
+                    "UTF-8"
+                )
+
+            val value =
+                URLEncoder.encode(
+                    entry.value,
+                    "UTF-8"
+                )
+
+            "$key=$value"
+        }
+    }
+
+    private fun parseChannels(
+        response: String
+    ): List<Channel> {
+
+        val result = mutableListOf<Channel>()
+
+        try {
+            val root =
+                JsonParser.parseString(response)
+
+            if (!root.isJsonObject) {
+                return emptyList()
+            }
+
+            val json =
+                root.asJsonObject
+
+            if (!json.has("js") ||
+                !json.get("js").isJsonObject
+            ) {
+                return emptyList()
+            }
+
+            val js =
+                json.get("js").asJsonObject
+
+            if (js.has("data")) {
+
+                val data = js.get("data")
+
+                if (data.isJsonArray) {
+
+                    for (item in data.asJsonArray) {
+
+                        if (!item.isJsonObject) {
+                            continue
+                        }
+
+                        val channel =
+                            parseChannelObject(
+                                item.asJsonObject
+                            )
+
+                        if (channel != null) {
+                            result.add(channel)
+                        }
+                    }
+
+                } else if (data.isJsonObject) {
+
+                    val channel =
+                        parseChannelObject(
+                            data.asJsonObject
+                        )
+
+                    if (channel != null) {
+                        result.add(channel)
+                    }
+                }
+            }
+
+            if (result.isEmpty() &&
+                js.has("results")
+            ) {
+
+                val results =
+                    js.get("results")
+
+                if (results.isJsonArray) {
+
+                    for (item in results.asJsonArray) {
+
+                        if (!item.isJsonObject) {
+                            continue
+                        }
+
+                        val channel =
+                            parseChannelObject(
+                                item.asJsonObject
+                            )
+
+                        if (channel != null) {
+                            result.add(channel)
+                        }
+                    }
+                }
+            }
+
+        } catch (e: Exception) {
+
+            Log.e(
+                TAG,
+                "Channel parsing failed",
+                e
+            )
+        }
+
+        return result
+    }
+
+    private fun parseChannelObject(
+        obj: JsonObject
+    ): Channel? {
+
+        val id =
+            firstValue(
+                obj,
+                "id",
+                "ch_id",
+                "channel_id"
+            )
+
+        val name =
+            firstValue(
+                obj,
+                "name",
+                "title"
+            )
+
+        val logo =
+            firstValue(
+                obj,
+                "logo",
+                "logo_url",
+                "icon"
+            )
+
+        val cmd =
+            firstValue(
+                obj,
+                "cmd",
+                "stream_url",
+                "url"
+            )
+
+        val categoryId =
+            firstValue(
+                obj,
+                "tv_genre_id",
+                "genre_id",
+                "category_id"
+            )
+
+        if (id.isEmpty() && name.isEmpty()) {
+            return null
+        }
+
+        return Channel(
+            id = id,
+            name = name.ifEmpty {
+                "Unknown Channel"
+            },
+            logo = logo,
+            cmd = cmd,
+            categoryId = categoryId
+        )
+    }
+
+    private fun firstValue(
+        obj: JsonObject,
+        vararg keys: String
+    ): String {
+
+        for (key in keys) {
+
+            if (!obj.has(key)) {
+                continue
+            }
+
+            try {
+                val value =
+                    obj.get(key)
+
+                if (!value.isJsonNull) {
+
+                    val text =
+                        value.asString
+
+                    if (!text.isNullOrBlank()) {
+                        return text
+                    }
+                }
+
+            } catch (_: Exception) {
+                // Try next key.
+            }
+        }
+
+        return ""
+    }
+
+    private fun getString(
+        obj: JsonObject,
+        key: String
+    ): String {
+
+        if (!obj.has(key)) {
+            return ""
+        }
+
+        return try {
+
+            val value =
+                obj.get(key)
+
+            if (value.isJsonNull) {
+                ""
+            } else {
+                value.asString ?: ""
+            }
+
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun finish(
+        callback: (Boolean, String) -> Unit,
+        success: Boolean,
+        message: String
+    ) {
+        callback(success, message)
+    }
+}
