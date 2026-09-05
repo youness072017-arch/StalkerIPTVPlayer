@@ -177,7 +177,7 @@ class StalkerClient {
                     token = null
                 )
 
-                val root = JsonParser.parseString(response)
+                val root = JsonParser().parse(response)
 
                 if (!root.isJsonObject) {
                     continue
@@ -302,7 +302,7 @@ class StalkerClient {
             token = null
         )
 
-        val root = JsonParser.parseString(response)
+        val root = JsonParser().parse(response)
 
         if (!root.isJsonObject) {
             throw Exception("Handshake returned invalid JSON.")
@@ -362,7 +362,7 @@ class StalkerClient {
             token = session.token
         )
 
-        val root = JsonParser.parseString(response)
+        val root = JsonParser().parse(response)
 
         if (!root.isJsonObject) {
             throw Exception("Profile returned invalid JSON.")
@@ -573,7 +573,7 @@ class StalkerClient {
 
         try {
             val root =
-                JsonParser.parseString(response)
+                JsonParser().parse(response)
 
             if (!root.isJsonObject) {
                 return emptyList()
