@@ -473,7 +473,7 @@ class StalkerClient {
                 var streamUrl = ""
                 if (cmdObj != null && cmdObj.isJsonObject) {
                     streamUrl = cmdObj.asJsonObject.get("cmd")?.asString ?: ""
-                } else if (cmdObj != null && cmdObj.isPrimitive) {
+                } else if (cmdObj != null && cmdObj.isJsonPrimitive) {
                     streamUrl = cmdObj.asString
                 }
 
@@ -599,7 +599,7 @@ class StalkerClient {
     }
 
     private fun parseJson(jsonStr: String): JsonObject {
-        val element = JsonParser.parseString(jsonStr)
+        val element = JsonParser().parse(jsonStr)
         if (element.isJsonObject) {
             return element.asJsonObject
         }
