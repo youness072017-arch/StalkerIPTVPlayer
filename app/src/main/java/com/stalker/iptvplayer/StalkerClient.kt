@@ -587,23 +587,36 @@ class StalkerClient {
             conn.setRequestProperty("Authorization", "Bearer $token")
         }
 
-        val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
-        val reader = BufferedReader(InputStreamReader(stream, "UTF-8"))
+        val responseCode = conn.responseCode
+        val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
+        val reader = BufferedReader(InputStreamReader(stream ?: conn.inputStream, "UTF-8"))
         val sb = StringBuilder()
         var line: String?
-        while (reader.readLine().also { line = reader.readLine() } != null) {
+        while (reader.readLine().also { line = it } != null) {
             sb.append(line)
         }
         reader.close()
-        return sb.toString()
+        
+        val result = sb.toString().trim()
+        Log.d(TAG, "URL: $fullUrl | Code: $responseCode | Response: $result")
+        return result
     }
 
     private fun parseJson(jsonStr: String): JsonObject {
-        val element = JsonParser().parse(jsonStr)
-        if (element.isJsonObject) {
-            return element.asJsonObject
+        try {
+            var cleanStr = jsonStr.trim()
+            // إزالة أي رموز غير مرغوب فيها إذا كانت تبدأ أو تنتهي بطريقة خاطئة
+            if (cleanStr.startsWith("<!--") || cleanStr.startsWith("<")) {
+                throw Exception("Server returned HTML instead of JSON")
+            }
+            val element = JsonParser().parse(cleanStr)
+            if (element.isJsonObject) {
+                return element.asJsonObject
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "JSON Parse Error for string: $jsonStr", e)
         }
-        throw Exception("Invalid JSON format")
+        throw Exception("Invalid JSON format from server")
     }
 
     private fun extractPagination(root: JsonObject): Pair<Int, Int> {
