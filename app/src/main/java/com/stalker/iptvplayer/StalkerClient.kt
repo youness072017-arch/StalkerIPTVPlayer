@@ -1,6 +1,8 @@
 package com.stalker.iptvplayer
 
 import android.util.Log
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import java.io.BufferedReader
@@ -14,6 +16,7 @@ class StalkerClient {
 
     companion object {
         private const val TAG = "StalkerClient"
+
         private const val CONNECT_TIMEOUT = 15000
         private const val READ_TIMEOUT = 20000
 
@@ -22,7 +25,11 @@ class StalkerClient {
                     "AppleWebKit/533.3 (KHTML, like Gecko) " +
                     "MAG250 stbapp ver: 2 rev: 250 Safari/533.3"
 
-        private const val X_USER_AGENT = "Model: MAG250; Link: WiFi"
+        private const val X_USER_AGENT =
+            "Model: MAG250; Link: WiFi"
+
+        private const val DEFAULT_LANGUAGE = "en"
+        private const val DEFAULT_TIMEZONE = "Europe/Paris"
     }
 
     data class Channel(
@@ -62,7 +69,8 @@ class StalkerClient {
     )
 
     // ============================================================
-    // PUBLIC: CONNECT + LIVE
+    // PUBLIC LIVE TV - OLD CALLBACK
+    // Kept for compatibility with the current DashboardActivity.
     // ============================================================
 
     fun authenticateAndFetchChannels(
@@ -70,64 +78,111 @@ class StalkerClient {
         macAddress: String,
         onResult: (Boolean, String) -> Unit
     ) {
+        fetchChannels(
+            portalUrl = portalUrl,
+            macAddress = macAddress
+        ) { success, channels, message ->
+
+            if (success) {
+                onResult(
+                    true,
+                    "Connected successfully. ${channels.size} Live TV channels found."
+                )
+            } else {
+                onResult(false, message)
+            }
+        }
+    }
+
+    // ============================================================
+    // PUBLIC LIVE TV - RETURNS ACTUAL CHANNEL LIST
+    // ============================================================
+
+    fun fetchChannels(
+        portalUrl: String,
+        macAddress: String,
+        onResult: (Boolean, List<Channel>, String) -> Unit
+    ) {
         Thread {
             try {
                 val portal = normalizePortalUrl(portalUrl)
                 val mac = normalizeMac(macAddress)
 
                 if (portal.isEmpty()) {
-                    finish(onResult, false, "Portal URL is empty or invalid.")
+                    finishChannels(
+                        onResult,
+                        false,
+                        emptyList(),
+                        "Portal URL is empty or invalid."
+                    )
                     return@Thread
                 }
 
                 if (!isValidMac(mac)) {
-                    finish(onResult, false, "Invalid MAC address.")
+                    finishChannels(
+                        onResult,
+                        false,
+                        emptyList(),
+                        "Invalid MAC address."
+                    )
                     return@Thread
                 }
 
-                Log.d(TAG, "Portal: $portal")
-                Log.d(TAG, "MAC: $mac")
+                Log.d(TAG, "LIVE: Portal = $portal")
+                Log.d(TAG, "LIVE: MAC = $mac")
 
-                val loadUrl = discoverLoadUrl(portal, mac)
+                val loadUrl = discoverLoadUrl(
+                    portal = portal,
+                    macAddress = mac
+                )
 
                 if (loadUrl.isEmpty()) {
-                    finish(
+                    finishChannels(
                         onResult,
                         false,
+                        emptyList(),
                         "Could not find a compatible Stalker portal endpoint."
                     )
                     return@Thread
                 }
+
+                Log.d(TAG, "LIVE: endpoint = $loadUrl")
 
                 val session = performHandshake(
                     loadUrl = loadUrl,
                     macAddress = mac
                 )
 
-                Log.d(TAG, "Handshake successful")
+                Log.d(TAG, "LIVE: handshake successful")
+                Log.d(TAG, "LIVE: token received")
 
+                // Profile is useful but some portals don't require it.
                 try {
                     getProfile(
                         session = session,
                         macAddress = mac
                     )
+
+                    Log.d(TAG, "LIVE: profile request successful")
                 } catch (e: Exception) {
-                    Log.w(TAG, "Profile request failed: ${e.message}")
+                    Log.w(
+                        TAG,
+                        "LIVE: profile request failed: ${e.message}"
+                    )
                 }
 
-                try {
-                    request(
-                        loadUrl = session.loadUrl,
-                        params = mapOf(
-                            "type" to "itv",
-                            "action" to "get_genres",
-                            "JsHttpRequest" to "1-xml"
-                        ),
-                        macAddress = mac,
-                        token = session.token
+                // Try to load genres first.
+                val categories = try {
+                    requestGenres(
+                        session = session,
+                        macAddress = mac
                     )
                 } catch (e: Exception) {
-                    Log.w(TAG, "Genres request failed: ${e.message}")
+                    Log.w(
+                        TAG,
+                        "LIVE: genres request failed: ${e.message}"
+                    )
+                    emptyMap()
                 }
 
                 val channelsResponse = requestChannels(
@@ -135,31 +190,60 @@ class StalkerClient {
                     macAddress = mac
                 )
 
-                val channels = parseChannels(channelsResponse)
+                val channels = parseChannels(
+                    response = channelsResponse,
+                    categories = categories
+                )
+
+                Log.d(
+                    TAG,
+                    "LIVE: parsed ${channels.size} channels"
+                )
 
                 if (channels.isEmpty()) {
-                    finish(
+                    Log.w(
+                        TAG,
+                        "LIVE: server response = ${channelsResponse.take(2000)}"
+                    )
+
+                    finishChannels(
                         onResult,
                         false,
+                        emptyList(),
                         "Portal connected, but no Live TV channels were found."
                     )
                     return@Thread
                 }
 
-                Log.d(TAG, "Parsed ${channels.size} channels")
+                channels.take(20).forEachIndexed { index, channel ->
+                    Log.d(
+                        TAG,
+                        "LIVE Channel[$index]: " +
+                                "${channel.name} | " +
+                                "id=${channel.id} | " +
+                                "category=${channel.categoryName} | " +
+                                "cmd=${channel.cmd.take(120)}"
+                    )
+                }
 
-                finish(
+                finishChannels(
                     onResult,
                     true,
+                    channels,
                     "Connected successfully. ${channels.size} Live TV channels found."
                 )
 
             } catch (e: Exception) {
-                Log.e(TAG, "Stalker connection failed", e)
+                Log.e(
+                    TAG,
+                    "LIVE: Stalker connection failed",
+                    e
+                )
 
-                finish(
+                finishChannels(
                     onResult,
                     false,
+                    emptyList(),
                     e.message ?: "Unknown portal connection error."
                 )
             }
@@ -167,7 +251,7 @@ class StalkerClient {
     }
 
     // ============================================================
-    // PUBLIC: MOVIES / VOD
+    // PUBLIC MOVIES / VOD
     // ============================================================
 
     fun fetchMovies(
@@ -202,33 +286,55 @@ class StalkerClient {
 
                 Log.d(TAG, "MOVIES: starting connection")
 
-                val loadUrl = discoverLoadUrl(portal, mac)
+                val loadUrl = discoverLoadUrl(
+                    portal,
+                    mac
+                )
 
                 if (loadUrl.isEmpty()) {
                     finishMovies(
                         onResult,
                         false,
                         emptyList(),
-                        "Could not find Stalker portal endpoint."
+                        "Could not find a compatible Stalker portal endpoint."
                     )
                     return@Thread
                 }
 
                 val session = performHandshake(
-                    loadUrl = loadUrl,
-                    macAddress = mac
+                    loadUrl,
+                    mac
                 )
 
                 Log.d(TAG, "MOVIES: handshake successful")
 
+                val categories = try {
+                    requestVodCategories(
+                        session,
+                        mac
+                    )
+                } catch (e: Exception) {
+                    Log.w(
+                        TAG,
+                        "MOVIES: categories failed: ${e.message}"
+                    )
+                    emptyMap()
+                }
+
                 val response = requestMovies(
-                    session = session,
-                    macAddress = mac
+                    session,
+                    mac
                 )
 
-                val movies = parseVodItems(response)
+                val movies = parseVodItems(
+                    response,
+                    categories
+                )
 
-                Log.d(TAG, "MOVIES: parsed ${movies.size} items")
+                Log.d(
+                    TAG,
+                    "MOVIES: parsed ${movies.size} items"
+                )
 
                 if (movies.isEmpty()) {
                     finishMovies(
@@ -248,7 +354,11 @@ class StalkerClient {
                 )
 
             } catch (e: Exception) {
-                Log.e(TAG, "Movies request failed", e)
+                Log.e(
+                    TAG,
+                    "Movies request failed",
+                    e
+                )
 
                 finishMovies(
                     onResult,
@@ -260,49 +370,8 @@ class StalkerClient {
         }.start()
     }
 
-    private fun requestMovies(
-        session: Session,
-        macAddress: String
-    ): String {
-
-        // First request categories.
-        try {
-            request(
-                loadUrl = session.loadUrl,
-                params = mapOf(
-                    "type" to "vod",
-                    "action" to "get_categories",
-                    "JsHttpRequest" to "1-xml"
-                ),
-                macAddress = macAddress,
-                token = session.token
-            )
-
-            Log.d(TAG, "MOVIES: categories request successful")
-
-        } catch (e: Exception) {
-            Log.w(
-                TAG,
-                "MOVIES: categories failed: ${e.message}"
-            )
-        }
-
-        // Main VOD request.
-        return request(
-            loadUrl = session.loadUrl,
-            params = mapOf(
-                "type" to "vod",
-                "action" to "get_ordered_list",
-                "p" to "1",
-                "JsHttpRequest" to "1-xml"
-            ),
-            macAddress = macAddress,
-            token = session.token
-        )
-    }
-
     // ============================================================
-    // PUBLIC: SERIES
+    // PUBLIC SERIES
     // ============================================================
 
     fun fetchSeries(
@@ -337,33 +406,55 @@ class StalkerClient {
 
                 Log.d(TAG, "SERIES: starting connection")
 
-                val loadUrl = discoverLoadUrl(portal, mac)
+                val loadUrl = discoverLoadUrl(
+                    portal,
+                    mac
+                )
 
                 if (loadUrl.isEmpty()) {
                     finishSeries(
                         onResult,
                         false,
                         emptyList(),
-                        "Could not find Stalker portal endpoint."
+                        "Could not find a compatible Stalker portal endpoint."
                     )
                     return@Thread
                 }
 
                 val session = performHandshake(
-                    loadUrl = loadUrl,
-                    macAddress = mac
+                    loadUrl,
+                    mac
                 )
 
                 Log.d(TAG, "SERIES: handshake successful")
 
+                val categories = try {
+                    requestSeriesCategories(
+                        session,
+                        mac
+                    )
+                } catch (e: Exception) {
+                    Log.w(
+                        TAG,
+                        "SERIES: categories failed: ${e.message}"
+                    )
+                    emptyMap()
+                }
+
                 val response = requestSeries(
-                    session = session,
-                    macAddress = mac
+                    session,
+                    mac
                 )
 
-                val series = parseSeriesItems(response)
+                val series = parseSeriesItems(
+                    response,
+                    categories
+                )
 
-                Log.d(TAG, "SERIES: parsed ${series.size} items")
+                Log.d(
+                    TAG,
+                    "SERIES: parsed ${series.size} items"
+                )
 
                 if (series.isEmpty()) {
                     finishSeries(
@@ -383,7 +474,11 @@ class StalkerClient {
                 )
 
             } catch (e: Exception) {
-                Log.e(TAG, "Series request failed", e)
+                Log.e(
+                    TAG,
+                    "Series request failed",
+                    e
+                )
 
                 finishSeries(
                     onResult,
@@ -395,49 +490,8 @@ class StalkerClient {
         }.start()
     }
 
-    private fun requestSeries(
-        session: Session,
-        macAddress: String
-    ): String {
-
-        // First request categories.
-        try {
-            request(
-                loadUrl = session.loadUrl,
-                params = mapOf(
-                    "type" to "series",
-                    "action" to "get_categories",
-                    "JsHttpRequest" to "1-xml"
-                ),
-                macAddress = macAddress,
-                token = session.token
-            )
-
-            Log.d(TAG, "SERIES: categories request successful")
-
-        } catch (e: Exception) {
-            Log.w(
-                TAG,
-                "SERIES: categories failed: ${e.message}"
-            )
-        }
-
-        // Main series request.
-        return request(
-            loadUrl = session.loadUrl,
-            params = mapOf(
-                "type" to "series",
-                "action" to "get_ordered_list",
-                "p" to "1",
-                "JsHttpRequest" to "1-xml"
-            ),
-            macAddress = macAddress,
-            token = session.token
-        )
-    }
-
     // ============================================================
-    // DISCOVER PORTAL
+    // PORTAL DISCOVERY
     // ============================================================
 
     private fun discoverLoadUrl(
@@ -450,12 +504,16 @@ class StalkerClient {
         val candidates = linkedSetOf(
             "$base/stalker_portal/server/load.php",
             "$base/portal.php",
-            "$base/server/load.php"
+            "$base/server/load.php",
+            "$base/stalker_portal/load.php"
         )
 
         for (candidate in candidates) {
             try {
-                Log.d(TAG, "Testing endpoint: $candidate")
+                Log.d(
+                    TAG,
+                    "DISCOVERY: testing $candidate"
+                )
 
                 val response = request(
                     loadUrl = candidate,
@@ -469,38 +527,37 @@ class StalkerClient {
                     token = null
                 )
 
-                val root = JsonParser().parse(response)
+                val root = parseJson(response)
 
                 if (!root.isJsonObject) {
                     continue
                 }
 
                 val json = root.asJsonObject
+                val js = jsonObject(json, "js")
 
-                if (!json.has("js")) {
+                if (js == null) {
                     continue
                 }
 
-                val js = json.get("js")
-
-                if (!js.isJsonObject) {
-                    continue
-                }
-
-                val token = getString(
-                    js.asJsonObject,
+                val token = firstValue(
+                    js,
                     "token"
                 )
 
                 if (token.isNotEmpty()) {
-                    Log.d(TAG, "Compatible endpoint: $candidate")
+                    Log.d(
+                        TAG,
+                        "DISCOVERY: compatible endpoint = $candidate"
+                    )
+
                     return candidate
                 }
 
             } catch (e: Exception) {
                 Log.w(
                     TAG,
-                    "Endpoint failed: $candidate -> ${e.message}"
+                    "DISCOVERY failed: $candidate -> ${e.message}"
                 )
             }
         }
@@ -509,7 +566,7 @@ class StalkerClient {
     }
 
     // ============================================================
-    // NORMALIZATION
+    // URL / MAC NORMALIZATION
     // ============================================================
 
     private fun normalizePortalUrl(
@@ -535,11 +592,15 @@ class StalkerClient {
         input: String
     ): String {
 
-        var value = input.trim().removeSuffix("/")
+        var value = input
+            .trim()
+            .removeSuffix("/")
 
         val suffixes = listOf(
             "/load.php",
+            "/server/load.php",
             "/server",
+            "/stalker_portal/c",
             "/stalker_portal",
             "/c"
         )
@@ -602,27 +663,27 @@ class StalkerClient {
             token = null
         )
 
-        val root = JsonParser().parse(response)
+        val root = parseJson(response)
 
         if (!root.isJsonObject) {
-            throw Exception("Handshake returned invalid JSON.")
+            throw Exception(
+                "Handshake returned invalid JSON."
+            )
         }
 
         val json = root.asJsonObject
 
-        if (!json.has("js") ||
-            !json.get("js").isJsonObject
-        ) {
-            throw Exception(
-                "Handshake response is missing 'js'."
-            )
-        }
+        val js = jsonObject(
+            json,
+            "js"
+        ) ?: throw Exception(
+            "Handshake response is missing 'js'."
+        )
 
-        val js = json
-            .get("js")
-            .asJsonObject
-
-        val token = getString(js, "token")
+        val token = firstValue(
+            js,
+            "token"
+        )
 
         if (token.isEmpty()) {
             throw Exception(
@@ -630,7 +691,10 @@ class StalkerClient {
             )
         }
 
-        val random = getString(js, "random")
+        val random = firstValue(
+            js,
+            "random"
+        )
 
         return Session(
             token = token,
@@ -666,30 +730,46 @@ class StalkerClient {
             token = session.token
         )
 
-        val root = JsonParser().parse(response)
+        val root = parseJson(response)
 
         if (!root.isJsonObject) {
-            throw Exception("Profile returned invalid JSON.")
+            throw Exception(
+                "Profile returned invalid JSON."
+            )
         }
 
         val json = root.asJsonObject
 
-        if (!json.has("js") ||
-            !json.get("js").isJsonObject
-        ) {
-            throw Exception(
-                "Profile response is missing 'js'."
-            )
-        }
-
-        return json
-            .get("js")
-            .asJsonObject
+        return jsonObject(
+            json,
+            "js"
+        ) ?: throw Exception(
+            "Profile response is missing 'js'."
+        )
     }
 
     // ============================================================
-    // LIVE
+    // LIVE TV REQUESTS
     // ============================================================
+
+    private fun requestGenres(
+        session: Session,
+        macAddress: String
+    ): Map<String, String> {
+
+        val response = request(
+            loadUrl = session.loadUrl,
+            params = mapOf(
+                "type" to "itv",
+                "action" to "get_genres",
+                "JsHttpRequest" to "1-xml"
+            ),
+            macAddress = macAddress,
+            token = session.token
+        )
+
+        return parseCategories(response)
+    }
 
     private fun requestChannels(
         session: Session,
@@ -716,17 +796,121 @@ class StalkerClient {
                 "get_all_channels failed: ${firstError.message}"
             )
 
-            request(
-                loadUrl = session.loadUrl,
-                params = mapOf(
-                    "type" to "itv",
-                    "action" to "get_channels",
-                    "JsHttpRequest" to "1-xml"
-                ),
-                macAddress = macAddress,
-                token = session.token
-            )
+            try {
+
+                request(
+                    loadUrl = session.loadUrl,
+                    params = mapOf(
+                        "type" to "itv",
+                        "action" to "get_channels",
+                        "JsHttpRequest" to "1-xml"
+                    ),
+                    macAddress = macAddress,
+                    token = session.token
+                )
+
+            } catch (secondError: Exception) {
+
+                Log.w(
+                    TAG,
+                    "get_channels failed: ${secondError.message}"
+                )
+
+                request(
+                    loadUrl = session.loadUrl,
+                    params = mapOf(
+                        "type" to "itv",
+                        "action" to "get_ordered_list",
+                        "p" to "1",
+                        "JsHttpRequest" to "1-xml"
+                    ),
+                    macAddress = macAddress,
+                    token = session.token
+                )
+            }
         }
+    }
+
+    // ============================================================
+    // MOVIES REQUESTS
+    // ============================================================
+
+    private fun requestVodCategories(
+        session: Session,
+        macAddress: String
+    ): Map<String, String> {
+
+        val response = request(
+            loadUrl = session.loadUrl,
+            params = mapOf(
+                "type" to "vod",
+                "action" to "get_categories",
+                "JsHttpRequest" to "1-xml"
+            ),
+            macAddress = macAddress,
+            token = session.token
+        )
+
+        return parseCategories(response)
+    }
+
+    private fun requestMovies(
+        session: Session,
+        macAddress: String
+    ): String {
+
+        return request(
+            loadUrl = session.loadUrl,
+            params = mapOf(
+                "type" to "vod",
+                "action" to "get_ordered_list",
+                "p" to "1",
+                "JsHttpRequest" to "1-xml"
+            ),
+            macAddress = macAddress,
+            token = session.token
+        )
+    }
+
+    // ============================================================
+    // SERIES REQUESTS
+    // ============================================================
+
+    private fun requestSeriesCategories(
+        session: Session,
+        macAddress: String
+    ): Map<String, String> {
+
+        val response = request(
+            loadUrl = session.loadUrl,
+            params = mapOf(
+                "type" to "series",
+                "action" to "get_categories",
+                "JsHttpRequest" to "1-xml"
+            ),
+            macAddress = macAddress,
+            token = session.token
+        )
+
+        return parseCategories(response)
+    }
+
+    private fun requestSeries(
+        session: Session,
+        macAddress: String
+    ): String {
+
+        return request(
+            loadUrl = session.loadUrl,
+            params = mapOf(
+                "type" to "series",
+                "action" to "get_ordered_list",
+                "p" to "1",
+                "JsHttpRequest" to "1-xml"
+            ),
+            macAddress = macAddress,
+            token = session.token
+        )
     }
 
     // ============================================================
@@ -749,12 +933,17 @@ class StalkerClient {
                 "$loadUrl?$query"
             }
 
-        Log.d(TAG, "Request: $finalUrl")
+        Log.d(
+            TAG,
+            "HTTP GET: $finalUrl"
+        )
 
         val connection =
-            URL(finalUrl).openConnection() as HttpURLConnection
+            URL(finalUrl)
+                .openConnection() as HttpURLConnection
 
         try {
+
             connection.requestMethod = "GET"
             connection.instanceFollowRedirects = true
             connection.connectTimeout = CONNECT_TIMEOUT
@@ -777,13 +966,20 @@ class StalkerClient {
             )
 
             connection.setRequestProperty(
+                "Accept-Language",
+                "en-US,en;q=0.9"
+            )
+
+            connection.setRequestProperty(
                 "Referer",
                 buildReferer(loadUrl)
             )
 
             connection.setRequestProperty(
                 "Cookie",
-                "mac=$macAddress; stb_lang=en; timezone=Europe/Paris"
+                "mac=$macAddress; " +
+                        "stb_lang=$DEFAULT_LANGUAGE; " +
+                        "timezone=$DEFAULT_TIMEZONE"
             )
 
             connection.setRequestProperty(
@@ -792,6 +988,7 @@ class StalkerClient {
             )
 
             if (!token.isNullOrBlank()) {
+
                 connection.setRequestProperty(
                     "Authorization",
                     "Bearer $token"
@@ -810,11 +1007,13 @@ class StalkerClient {
 
             val response =
                 stream?.let {
+
                     BufferedReader(
                         InputStreamReader(it)
                     ).use { reader ->
                         reader.readText()
                     }
+
                 } ?: ""
 
             Log.d(
@@ -842,457 +1041,15 @@ class StalkerClient {
     }
 
     // ============================================================
-    // PARSE MOVIES
+    // REFERER
     // ============================================================
-
-    private fun parseVodItems(
-        response: String
-    ): List<VodItem> {
-
-        val result = mutableListOf<VodItem>()
-
-        try {
-            val root = JsonParser().parse(response)
-
-            if (!root.isJsonObject) {
-                return emptyList()
-            }
-
-            val json = root.asJsonObject
-
-            if (!json.has("js") ||
-                !json.get("js").isJsonObject
-            ) {
-                return emptyList()
-            }
-
-            val js = json.get("js").asJsonObject
-
-            val data =
-                if (js.has("data")) js.get("data")
-                else if (js.has("results")) js.get("results")
-                else null
-
-            if (data != null && data.isJsonArray) {
-
-                for (item in data.asJsonArray) {
-
-                    if (!item.isJsonObject) {
-                        continue
-                    }
-
-                    val obj = item.asJsonObject
-
-                    val id = firstValue(
-                        obj,
-                        "id",
-                        "movie_id",
-                        "vod_id"
-                    )
-
-                    val name = firstValue(
-                        obj,
-                        "name",
-                        "title"
-                    )
-
-                    val logo = firstValue(
-                        obj,
-                        "logo",
-                        "screenshot_uri",
-                        "poster",
-                        "cover"
-                    )
-
-                    val cmd = firstValue(
-                        obj,
-                        "cmd",
-                        "stream_url",
-                        "url"
-                    )
-
-                    val categoryId = firstValue(
-                        obj,
-                        "category_id",
-                        "genre_id"
-                    )
-
-                    val year = firstValue(
-                        obj,
-                        "year"
-                    )
-
-                    val description = firstValue(
-                        obj,
-                        "description",
-                        "descr"
-                    )
-
-                    if (id.isNotEmpty() || name.isNotEmpty()) {
-
-                        result.add(
-                            VodItem(
-                                id = id,
-                                name = name.ifEmpty {
-                                    "Unknown Movie"
-                                },
-                                logo = logo,
-                                cmd = cmd,
-                                categoryId = categoryId,
-                                year = year,
-                                description = description
-                            )
-                        )
-                    }
-                }
-            }
-
-        } catch (e: Exception) {
-            Log.e(
-                TAG,
-                "VOD parsing failed",
-                e
-            )
-        }
-
-        return result
-    }
-
-    // ============================================================
-    // PARSE SERIES
-    // ============================================================
-
-    private fun parseSeriesItems(
-        response: String
-    ): List<SeriesItem> {
-
-        val result = mutableListOf<SeriesItem>()
-
-        try {
-            val root = JsonParser().parse(response)
-
-            if (!root.isJsonObject) {
-                return emptyList()
-            }
-
-            val json = root.asJsonObject
-
-            if (!json.has("js") ||
-                !json.get("js").isJsonObject
-            ) {
-                return emptyList()
-            }
-
-            val js = json.get("js").asJsonObject
-
-            val data =
-                if (js.has("data")) js.get("data")
-                else if (js.has("results")) js.get("results")
-                else null
-
-            if (data != null && data.isJsonArray) {
-
-                for (item in data.asJsonArray) {
-
-                    if (!item.isJsonObject) {
-                        continue
-                    }
-
-                    val obj = item.asJsonObject
-
-                    val id = firstValue(
-                        obj,
-                        "id",
-                        "series_id"
-                    )
-
-                    val name = firstValue(
-                        obj,
-                        "name",
-                        "title"
-                    )
-
-                    val logo = firstValue(
-                        obj,
-                        "logo",
-                        "screenshot_uri",
-                        "poster",
-                        "cover"
-                    )
-
-                    val categoryId = firstValue(
-                        obj,
-                        "category_id",
-                        "genre_id"
-                    )
-
-                    val year = firstValue(
-                        obj,
-                        "year"
-                    )
-
-                    val description = firstValue(
-                        obj,
-                        "description",
-                        "descr"
-                    )
-
-                    if (id.isNotEmpty() || name.isNotEmpty()) {
-
-                        result.add(
-                            SeriesItem(
-                                id = id,
-                                name = name.ifEmpty {
-                                    "Unknown Series"
-                                },
-                                logo = logo,
-                                categoryId = categoryId,
-                                year = year,
-                                description = description
-                            )
-                        )
-                    }
-                }
-            }
-
-        } catch (e: Exception) {
-            Log.e(
-                TAG,
-                "Series parsing failed",
-                e
-            )
-        }
-
-        return result
-    }
-
-    // ============================================================
-    // PARSE LIVE
-    // ============================================================
-
-    private fun parseChannels(
-        response: String
-    ): List<Channel> {
-
-        val result = mutableListOf<Channel>()
-
-        try {
-            val root =
-                JsonParser().parse(response)
-
-            if (!root.isJsonObject) {
-                return emptyList()
-            }
-
-            val json =
-                root.asJsonObject
-
-            if (!json.has("js") ||
-                !json.get("js").isJsonObject
-            ) {
-                return emptyList()
-            }
-
-            val js =
-                json.get("js").asJsonObject
-
-            if (js.has("data")) {
-
-                val data = js.get("data")
-
-                if (data.isJsonArray) {
-
-                    for (item in data.asJsonArray) {
-
-                        if (!item.isJsonObject) {
-                            continue
-                        }
-
-                        val channel =
-                            parseChannelObject(
-                                item.asJsonObject
-                            )
-
-                        if (channel != null) {
-                            result.add(channel)
-                        }
-                    }
-
-                } else if (data.isJsonObject) {
-
-                    val channel =
-                        parseChannelObject(
-                            data.asJsonObject
-                        )
-
-                    if (channel != null) {
-                        result.add(channel)
-                    }
-                }
-            }
-
-            if (result.isEmpty() &&
-                js.has("results")
-            ) {
-
-                val results =
-                    js.get("results")
-
-                if (results.isJsonArray) {
-
-                    for (item in results.asJsonArray) {
-
-                        if (!item.isJsonObject) {
-                            continue
-                        }
-
-                        val channel =
-                            parseChannelObject(
-                                item.asJsonObject
-                            )
-
-                        if (channel != null) {
-                            result.add(channel)
-                        }
-                    }
-                }
-            }
-
-        } catch (e: Exception) {
-
-            Log.e(
-                TAG,
-                "Channel parsing failed",
-                e
-            )
-        }
-
-        return result
-    }
-
-    private fun parseChannelObject(
-        obj: JsonObject
-    ): Channel? {
-
-        val id =
-            firstValue(
-                obj,
-                "id",
-                "ch_id",
-                "channel_id"
-            )
-
-        val name =
-            firstValue(
-                obj,
-                "name",
-                "title"
-            )
-
-        val logo =
-            firstValue(
-                obj,
-                "logo",
-                "logo_url",
-                "icon"
-            )
-
-        val cmd =
-            firstValue(
-                obj,
-                "cmd",
-                "stream_url",
-                "url"
-            )
-
-        val categoryId =
-            firstValue(
-                obj,
-                "tv_genre_id",
-                "genre_id",
-                "category_id"
-            )
-
-        if (id.isEmpty() && name.isEmpty()) {
-            return null
-        }
-
-        return Channel(
-            id = id,
-            name = name.ifEmpty {
-                "Unknown Channel"
-            },
-            logo = logo,
-            cmd = cmd,
-            categoryId = categoryId
-        )
-    }
-
-    // ============================================================
-    // HELPERS
-    // ============================================================
-
-    private fun firstValue(
-        obj: JsonObject,
-        vararg keys: String
-    ): String {
-
-        for (key in keys) {
-
-            if (!obj.has(key)) {
-                continue
-            }
-
-            try {
-
-                val value = obj.get(key)
-
-                if (!value.isJsonNull) {
-
-                    val text = value.asString
-
-                    if (!text.isNullOrBlank()) {
-                        return text
-                    }
-                }
-
-            } catch (_: Exception) {
-                // Try next key.
-            }
-        }
-
-        return ""
-    }
-
-    private fun getString(
-        obj: JsonObject,
-        key: String
-    ): String {
-
-        if (!obj.has(key)) {
-            return ""
-        }
-
-        return try {
-
-            val value = obj.get(key)
-
-            if (value.isJsonNull) {
-                ""
-            } else {
-                value.asString ?: ""
-            }
-
-        } catch (_: Exception) {
-            ""
-        }
-    }
 
     private fun buildReferer(
         loadUrl: String
     ): String {
 
         return try {
+
             val url = URL(loadUrl)
 
             "${url.protocol}://${url.authority}/stalker_portal/c/"
@@ -1301,6 +1058,10 @@ class StalkerClient {
             loadUrl
         }
     }
+
+    // ============================================================
+    // QUERY BUILDER
+    // ============================================================
 
     private fun buildQuery(
         params: Map<String, String>
@@ -1324,12 +1085,636 @@ class StalkerClient {
         }
     }
 
-    private fun finish(
-        callback: (Boolean, String) -> Unit,
+    // ============================================================
+    // CHANNEL PARSER
+    // ============================================================
+
+    private fun parseChannels(
+        response: String,
+        categories: Map<String, String> = emptyMap()
+    ): List<Channel> {
+
+        val result = mutableListOf<Channel>()
+
+        try {
+
+            val root = parseJson(response)
+
+            if (!root.isJsonObject) {
+                return emptyList()
+            }
+
+            val json = root.asJsonObject
+
+            val js = jsonObject(
+                json,
+                "js"
+            ) ?: return emptyList()
+
+            val items =
+                extractItems(
+                    js
+                )
+
+            for (item in items) {
+
+                val channel =
+                    parseChannelObject(
+                        item,
+                        categories
+                    )
+
+                if (channel != null) {
+                    result.add(channel)
+                }
+            }
+
+        } catch (e: Exception) {
+
+            Log.e(
+                TAG,
+                "Channel parsing failed",
+                e
+            )
+        }
+
+        return result
+    }
+
+    private fun parseChannelObject(
+        obj: JsonObject,
+        categories: Map<String, String>
+    ): Channel? {
+
+        val id =
+            firstValue(
+                obj,
+                "id",
+                "ch_id",
+                "channel_id"
+            )
+
+        val name =
+            firstValue(
+                obj,
+                "name",
+                "title",
+                "channel_name"
+            )
+
+        val logo =
+            firstValue(
+                obj,
+                "logo",
+                "logo_url",
+                "icon",
+                "tvg_logo"
+            )
+
+        val cmd =
+            firstValue(
+                obj,
+                "cmd",
+                "stream_url",
+                "url",
+                "stream"
+            )
+
+        val categoryId =
+            firstValue(
+                obj,
+                "tv_genre_id",
+                "genre_id",
+                "category_id",
+                "genre"
+            )
+
+        if (id.isEmpty() && name.isEmpty()) {
+            return null
+        }
+
+        val categoryName =
+            categories[categoryId] ?: ""
+
+        return Channel(
+            id = id,
+            name = name.ifEmpty {
+                "Unknown Channel"
+            },
+            logo = logo,
+            cmd = cmd,
+            categoryId = categoryId,
+            categoryName = categoryName
+        )
+    }
+
+    // ============================================================
+    // VOD PARSER
+    // ============================================================
+
+    private fun parseVodItems(
+        response: String,
+        categories: Map<String, String> = emptyMap()
+    ): List<VodItem> {
+
+        val result = mutableListOf<VodItem>()
+
+        try {
+
+            val root = parseJson(response)
+
+            if (!root.isJsonObject) {
+                return emptyList()
+            }
+
+            val json = root.asJsonObject
+
+            val js = jsonObject(
+                json,
+                "js"
+            ) ?: return emptyList()
+
+            val items =
+                extractItems(
+                    js
+                )
+
+            for (item in items) {
+
+                val id =
+                    firstValue(
+                        item,
+                        "id",
+                        "vclub_id",
+                        "movie_id"
+                    )
+
+                val name =
+                    firstValue(
+                        item,
+                        "name",
+                        "title"
+                    )
+
+                if (id.isEmpty() && name.isEmpty()) {
+                    continue
+                }
+
+                val logo =
+                    firstValue(
+                        item,
+                        "screenshot_uri",
+                        "logo",
+                        "cover",
+                        "poster",
+                        "icon"
+                    )
+
+                val cmd =
+                    firstValue(
+                        item,
+                        "cmd",
+                        "stream_url",
+                        "url"
+                    )
+
+                val categoryId =
+                    firstValue(
+                        item,
+                        "category_id",
+                        "genre_id"
+                    )
+
+                val year =
+                    firstValue(
+                        item,
+                        "year",
+                        "release_year"
+                    )
+
+                val description =
+                    firstValue(
+                        item,
+                        "description",
+                        "descr",
+                        "plot"
+                    )
+
+                result.add(
+                    VodItem(
+                        id = id,
+                        name = name.ifEmpty {
+                            "Unknown Movie"
+                        },
+                        logo = logo,
+                        cmd = cmd,
+                        categoryId = categoryId,
+                        categoryName = categories[categoryId] ?: "",
+                        year = year,
+                        description = description
+                    )
+                )
+            }
+
+        } catch (e: Exception) {
+
+            Log.e(
+                TAG,
+                "VOD parsing failed",
+                e
+            )
+        }
+
+        return result
+    }
+
+    // ============================================================
+    // SERIES PARSER
+    // ============================================================
+
+    private fun parseSeriesItems(
+        response: String,
+        categories: Map<String, String> = emptyMap()
+    ): List<SeriesItem> {
+
+        val result = mutableListOf<SeriesItem>()
+
+        try {
+
+            val root = parseJson(response)
+
+            if (!root.isJsonObject) {
+                return emptyList()
+            }
+
+            val json = root.asJsonObject
+
+            val js = jsonObject(
+                json,
+                "js"
+            ) ?: return emptyList()
+
+            val items =
+                extractItems(
+                    js
+                )
+
+            for (item in items) {
+
+                val id =
+                    firstValue(
+                        item,
+                        "id",
+                        "series_id"
+                    )
+
+                val name =
+                    firstValue(
+                        item,
+                        "name",
+                        "title"
+                    )
+
+                if (id.isEmpty() && name.isEmpty()) {
+                    continue
+                }
+
+                val logo =
+                    firstValue(
+                        item,
+                        "screenshot_uri",
+                        "logo",
+                        "cover",
+                        "poster",
+                        "icon"
+                    )
+
+                val categoryId =
+                    firstValue(
+                        item,
+                        "category_id",
+                        "genre_id"
+                    )
+
+                val year =
+                    firstValue(
+                        item,
+                        "year",
+                        "release_year"
+                    )
+
+                val description =
+                    firstValue(
+                        item,
+                        "description",
+                        "descr",
+                        "plot"
+                    )
+
+                result.add(
+                    SeriesItem(
+                        id = id,
+                        name = name.ifEmpty {
+                            "Unknown Series"
+                        },
+                        logo = logo,
+                        categoryId = categoryId,
+                        categoryName = categories[categoryId] ?: "",
+                        year = year,
+                        description = description
+                    )
+                )
+            }
+
+        } catch (e: Exception) {
+
+            Log.e(
+                TAG,
+                "Series parsing failed",
+                e
+            )
+        }
+
+        return result
+    }
+
+    // ============================================================
+    // GENERIC CATEGORY PARSER
+    // ============================================================
+
+    private fun parseCategories(
+        response: String
+    ): Map<String, String> {
+
+        val result =
+            linkedMapOf<String, String>()
+
+        try {
+
+            val root = parseJson(response)
+
+            if (!root.isJsonObject) {
+                return emptyMap()
+            }
+
+            val json = root.asJsonObject
+
+            val js = jsonObject(
+                json,
+                "js"
+            ) ?: return emptyMap()
+
+            val items =
+                extractItems(
+                    js
+                )
+
+            for (item in items) {
+
+                val id =
+                    firstValue(
+                        item,
+                        "id",
+                        "category_id",
+                        "genre_id"
+                    )
+
+                val name =
+                    firstValue(
+                        item,
+                        "title",
+                        "name"
+                    )
+
+                if (id.isNotEmpty() &&
+                    name.isNotEmpty()
+                ) {
+                    result[id] = name
+                }
+            }
+
+        } catch (e: Exception) {
+
+            Log.e(
+                TAG,
+                "Category parsing failed",
+                e
+            )
+        }
+
+        return result
+    }
+
+    // ============================================================
+    // EXTRACT ITEMS FROM DIFFERENT STALKER RESPONSE SHAPES
+    // ============================================================
+
+    private fun extractItems(
+        js: JsonObject
+    ): List<JsonObject> {
+
+        val result =
+            mutableListOf<JsonObject>()
+
+        val possibleKeys = listOf(
+            "data",
+            "results",
+            "channels",
+            "items",
+            "list"
+        )
+
+        for (key in possibleKeys) {
+
+            if (!js.has(key)) {
+                continue
+            }
+
+            val value =
+                js.get(key)
+
+            if (value.isJsonArray) {
+
+                val array =
+                    value.asJsonArray
+
+                for (item in array) {
+
+                    if (item.isJsonObject) {
+                        result.add(
+                            item.asJsonObject
+                        )
+                    }
+                }
+
+                if (result.isNotEmpty()) {
+                    return result
+                }
+            }
+
+            if (value.isJsonObject) {
+
+                val obj =
+                    value.asJsonObject
+
+                // Some portals return:
+                // data: { ... }
+                // while others return:
+                // data: { results: [...] }
+
+                val nested =
+                    extractItems(
+                        obj
+                    )
+
+                if (nested.isNotEmpty()) {
+                    result.addAll(nested)
+                    return result
+                }
+
+                result.add(obj)
+                return result
+            }
+        }
+
+        // Last fallback:
+        // if "js" itself contains numeric object keys.
+        for ((key, value) in js.entrySet()) {
+
+            if (key == "total_items" ||
+                key == "total" ||
+                key == "max_page_items"
+            ) {
+                continue
+            }
+
+            if (value.isJsonObject) {
+
+                result.add(
+                    value.asJsonObject
+                )
+            }
+        }
+
+        return result
+    }
+
+    // ============================================================
+    // JSON HELPERS
+    // ============================================================
+
+    private fun parseJson(
+        response: String
+    ): JsonElement {
+
+        return JsonParser()
+            .parse(response)
+    }
+
+    private fun jsonObject(
+        parent: JsonObject,
+        key: String
+    ): JsonObject? {
+
+        if (!parent.has(key)) {
+            return null
+        }
+
+        return try {
+
+            val value =
+                parent.get(key)
+
+            if (value.isJsonObject) {
+                value.asJsonObject
+            } else {
+                null
+            }
+
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun firstValue(
+        obj: JsonObject,
+        vararg keys: String
+    ): String {
+
+        for (key in keys) {
+
+            if (!obj.has(key)) {
+                continue
+            }
+
+            try {
+
+                val value =
+                    obj.get(key)
+
+                if (value.isJsonNull) {
+                    continue
+                }
+
+                if (value.isJsonPrimitive) {
+
+                    val primitive =
+                        value.asJsonPrimitive
+
+                    val text =
+                        when {
+                            primitive.isString ->
+                                primitive.asString
+
+                            primitive.isNumber ->
+                                primitive.asNumber.toString()
+
+                            primitive.isBoolean ->
+                                primitive.asBoolean.toString()
+
+                            else ->
+                                ""
+                        }
+
+                    if (text.isNotBlank()) {
+                        return text
+                    }
+                }
+
+            } catch (_: Exception) {
+                // Try next key.
+            }
+        }
+
+        return ""
+    }
+
+    private fun getString(
+        obj: JsonObject,
+        key: String
+    ): String {
+        return firstValue(
+            obj,
+            key
+        )
+    }
+
+    // ============================================================
+    // CALLBACK HELPERS
+    // ============================================================
+
+    private fun finishChannels(
+        callback: (Boolean, List<Channel>, String) -> Unit,
         success: Boolean,
+        channels: List<Channel>,
         message: String
     ) {
-        callback(success, message)
+
+        callback(
+            success,
+            channels,
+            message
+        )
     }
 
     private fun finishMovies(
@@ -1338,7 +1723,12 @@ class StalkerClient {
         movies: List<VodItem>,
         message: String
     ) {
-        callback(success, movies, message)
+
+        callback(
+            success,
+            movies,
+            message
+        )
     }
 
     private fun finishSeries(
@@ -1347,6 +1737,11 @@ class StalkerClient {
         series: List<SeriesItem>,
         message: String
     ) {
-        callback(success, series, message)
+
+        callback(
+            success,
+            series,
+            message
+        )
     }
 }
