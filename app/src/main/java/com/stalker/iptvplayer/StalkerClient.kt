@@ -604,19 +604,18 @@ class StalkerClient {
 
     private fun parseJson(jsonStr: String): JsonObject {
         try {
-            var cleanStr = jsonStr.trim()
-            // إزالة أي رموز غير مرغوب فيها إذا كانت تبدأ أو تنتهي بطريقة خاطئة
-            if (cleanStr.startsWith("<!--") || cleanStr.startsWith("<")) {
-                throw Exception("Server returned HTML instead of JSON")
-            }
-            val element = JsonParser().parse(cleanStr)
-            if (element.isJsonObject) {
-                return element.asJsonObject
+            val cleanStr = jsonStr.trim()
+            if (cleanStr.startsWith("{") && cleanStr.endsWith("}")) {
+                val element = JsonParser().parse(cleanStr)
+                if (element.isJsonObject) {
+                    return element.asJsonObject
+                }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "JSON Parse Error for string: $jsonStr", e)
+            Log.e(TAG, "JSON Parse Error", e)
         }
-        throw Exception("Invalid JSON format from server")
+        // إرجاع كائن فارغ عوض إحداث Crash يخرج من التطبيق
+        return JsonObject()
     }
 
     private fun extractPagination(root: JsonObject): Pair<Int, Int> {
