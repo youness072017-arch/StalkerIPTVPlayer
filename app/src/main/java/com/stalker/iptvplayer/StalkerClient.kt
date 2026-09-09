@@ -13,13 +13,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.util.UUID
+import kotlin.concurrent.thread
 
 class StalkerClient {
 
     companion object {
         private const val TAG = "StalkerClient"
 
-        private const val LOAD_PATH = "/stalker_portal/server/load.php"
+        private const val LOAD_PATH =
+            "/stalker_portal/server/load.php"
 
         private const val DEFAULT_PAGE_SIZE = 100
         private const val MAX_PAGES = 50
@@ -31,7 +34,7 @@ class StalkerClient {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     // -------------------------------------------------------------------------
-    // Models
+    // MODELS
     // -------------------------------------------------------------------------
 
     data class Channel(
@@ -97,7 +100,7 @@ class StalkerClient {
     )
 
     // -------------------------------------------------------------------------
-    // Session
+    // SESSION
     // -------------------------------------------------------------------------
 
     @Volatile
@@ -116,7 +119,7 @@ class StalkerClient {
     }
 
     // -------------------------------------------------------------------------
-    // Public: Live TV
+    // LIVE TV
     // -------------------------------------------------------------------------
 
     fun fetchChannels(
@@ -130,26 +133,32 @@ class StalkerClient {
                 val mac = normalizeMac(macAddress)
 
                 if (portal.isBlank() || mac.isBlank()) {
-                    postResult(onResult, false, emptyList(), "Portal or MAC is missing.")
+                    postResult(
+                        onResult,
+                        false,
+                        emptyList(),
+                        "Portal or MAC is missing."
+                    )
                     return@runAsync
                 }
 
                 val session = getOrCreateSession(portal, mac)
 
-                val categories = fetchCategories(
+                val categories = fetchCategoriesInternal(
                     session,
                     mac,
                     "itv"
                 )
 
                 val categoryMap = categories.associateBy(
-                    keySelector = { jsonString(it, "id") },
-                    valueTransform = { jsonString(it, "title") }
+                    { jsonString(it, "id") },
+                    { firstString(it, "title", "name") }
                 )
 
-                val allChannels = mutableListOf<Channel>()
+                val channels = mutableListOf<Channel>()
 
                 for (page in 1..MAX_PAGES) {
+
                     val response = request(
                         session = session,
                         mac = mac,
@@ -161,13 +170,14 @@ class StalkerClient {
                         )
                     )
 
-                    val items = extractArray(response, "data")
+                    val items = extractArray(response, "js", "data")
 
                     if (items.isEmpty()) {
                         break
                     }
 
                     for (item in items) {
+
                         val id = firstString(
                             item,
                             "id",
@@ -192,7 +202,7 @@ class StalkerClient {
                             "genre_id"
                         )
 
-                        allChannels.add(
+                        channels.add(
                             Channel(
                                 id = id,
                                 name = name,
@@ -220,12 +230,16 @@ class StalkerClient {
                 postResult(
                     onResult,
                     true,
-                    allChannels.distinctBy { it.id.ifBlank { it.name } },
+                    channels.distinctBy {
+                        it.id.ifBlank { it.name }
+                    },
                     "Live TV loaded."
                 )
 
             } catch (e: Exception) {
+
                 Log.e(TAG, "fetchChannels failed", e)
+
                 postResult(
                     onResult,
                     false,
@@ -237,7 +251,7 @@ class StalkerClient {
     }
 
     // -------------------------------------------------------------------------
-    // Public: Movies / VOD
+    // MOVIES / VOD
     // -------------------------------------------------------------------------
 
     fun fetchMovies(
@@ -251,26 +265,32 @@ class StalkerClient {
                 val mac = normalizeMac(macAddress)
 
                 if (portal.isBlank() || mac.isBlank()) {
-                    postResult(onResult, false, emptyList(), "Portal or MAC is missing.")
+                    postResult(
+                        onResult,
+                        false,
+                        emptyList(),
+                        "Portal or MAC is missing."
+                    )
                     return@runAsync
                 }
 
                 val session = getOrCreateSession(portal, mac)
 
-                val categories = fetchCategories(
+                val categories = fetchCategoriesInternal(
                     session,
                     mac,
                     "vod"
                 )
 
                 val categoryMap = categories.associateBy(
-                    keySelector = { jsonString(it, "id") },
-                    valueTransform = { jsonString(it, "title") }
+                    { jsonString(it, "id") },
+                    { firstString(it, "title", "name") }
                 )
 
                 val movies = mutableListOf<VodItem>()
 
                 for (page in 1..MAX_PAGES) {
+
                     val response = request(
                         session = session,
                         mac = mac,
@@ -282,13 +302,14 @@ class StalkerClient {
                         )
                     )
 
-                    val items = extractArray(response, "data")
+                    val items = extractArray(response, "js", "data")
 
                     if (items.isEmpty()) {
                         break
                     }
 
                     for (item in items) {
+
                         val id = firstString(
                             item,
                             "id",
@@ -350,12 +371,16 @@ class StalkerClient {
                 postResult(
                     onResult,
                     true,
-                    movies.distinctBy { it.id.ifBlank { it.name } },
+                    movies.distinctBy {
+                        it.id.ifBlank { it.name }
+                    },
                     "Movies loaded."
                 )
 
             } catch (e: Exception) {
+
                 Log.e(TAG, "fetchMovies failed", e)
+
                 postResult(
                     onResult,
                     false,
@@ -367,7 +392,7 @@ class StalkerClient {
     }
 
     // -------------------------------------------------------------------------
-    // Public: Series
+    // SERIES
     // -------------------------------------------------------------------------
 
     fun fetchSeries(
@@ -381,26 +406,32 @@ class StalkerClient {
                 val mac = normalizeMac(macAddress)
 
                 if (portal.isBlank() || mac.isBlank()) {
-                    postResult(onResult, false, emptyList(), "Portal or MAC is missing.")
+                    postResult(
+                        onResult,
+                        false,
+                        emptyList(),
+                        "Portal or MAC is missing."
+                    )
                     return@runAsync
                 }
 
                 val session = getOrCreateSession(portal, mac)
 
-                val categories = fetchCategories(
+                val categories = fetchCategoriesInternal(
                     session,
                     mac,
                     "series"
                 )
 
                 val categoryMap = categories.associateBy(
-                    keySelector = { jsonString(it, "id") },
-                    valueTransform = { jsonString(it, "title") }
+                    { jsonString(it, "id") },
+                    { firstString(it, "title", "name") }
                 )
 
                 val seriesList = mutableListOf<SeriesItem>()
 
                 for (page in 1..MAX_PAGES) {
+
                     val response = request(
                         session = session,
                         mac = mac,
@@ -412,13 +443,14 @@ class StalkerClient {
                         )
                     )
 
-                    val items = extractArray(response, "data")
+                    val items = extractArray(response, "js", "data")
 
                     if (items.isEmpty()) {
                         break
                     }
 
                     for (item in items) {
+
                         val id = firstString(
                             item,
                             "id",
@@ -475,12 +507,16 @@ class StalkerClient {
                 postResult(
                     onResult,
                     true,
-                    seriesList.distinctBy { it.id.ifBlank { it.name } },
+                    seriesList.distinctBy {
+                        it.id.ifBlank { it.name }
+                    },
                     "Series loaded."
                 )
 
             } catch (e: Exception) {
+
                 Log.e(TAG, "fetchSeries failed", e)
+
                 postResult(
                     onResult,
                     false,
@@ -492,7 +528,7 @@ class StalkerClient {
     }
 
     // -------------------------------------------------------------------------
-    // Public: Series seasons
+    // SERIES SEASONS
     // -------------------------------------------------------------------------
 
     fun fetchSeriesSeasons(
@@ -503,6 +539,7 @@ class StalkerClient {
     ) {
         runAsync {
             try {
+
                 val portal = normalizePortalUrl(portalUrl)
                 val mac = normalizeMac(macAddress)
 
@@ -550,7 +587,9 @@ class StalkerClient {
                 )
 
             } catch (e: Exception) {
+
                 Log.e(TAG, "fetchSeriesSeasons failed", e)
+
                 postResult(
                     onResult,
                     false,
@@ -562,7 +601,7 @@ class StalkerClient {
     }
 
     // -------------------------------------------------------------------------
-    // Public: Series episodes
+    // SERIES EPISODES
     // -------------------------------------------------------------------------
 
     fun fetchSeriesEpisodes(
@@ -574,6 +613,7 @@ class StalkerClient {
     ) {
         runAsync {
             try {
+
                 val portal = normalizePortalUrl(portalUrl)
                 val mac = normalizeMac(macAddress)
 
@@ -583,6 +623,16 @@ class StalkerClient {
                         false,
                         emptyList(),
                         "Portal or MAC is missing."
+                    )
+                    return@runAsync
+                }
+
+                if (seriesId.isBlank()) {
+                    postResult(
+                        onResult,
+                        false,
+                        emptyList(),
+                        "Series ID is missing."
                     )
                     return@runAsync
                 }
@@ -612,7 +662,9 @@ class StalkerClient {
                 )
 
             } catch (e: Exception) {
+
                 Log.e(TAG, "fetchSeriesEpisodes failed", e)
+
                 postResult(
                     onResult,
                     false,
@@ -624,7 +676,9 @@ class StalkerClient {
     }
 
     // -------------------------------------------------------------------------
-    // Public: Categories
+    // PUBLIC CATEGORIES API
+    //
+    // Kept callback-based so existing Dashboard/UI code remains compatible.
     // -------------------------------------------------------------------------
 
     fun fetchCategories(
@@ -635,26 +689,40 @@ class StalkerClient {
     ) {
         runAsync {
             try {
+
                 val portal = normalizePortalUrl(portalUrl)
                 val mac = normalizeMac(macAddress)
 
+                if (portal.isBlank() || mac.isBlank()) {
+                    postResult(
+                        onResult,
+                        false,
+                        emptyList(),
+                        "Portal or MAC is missing."
+                    )
+                    return@runAsync
+                }
+
                 val session = getOrCreateSession(portal, mac)
 
-                val json = request(
-                    session = session,
-                    mac = mac,
-                    params = mapOf(
-                        "type" to type,
-                        "action" to "get_categories",
-                        "JsHttpRequest" to "1-xml"
-                    )
+                val array = fetchCategoriesInternal(
+                    session,
+                    mac,
+                    type
                 )
 
-                val array = extractArray(json, "js")
-
                 val result = array.mapNotNull { item ->
-                    val id = firstString(item, "id")
-                    val title = firstString(item, "title", "name")
+
+                    val id = firstString(
+                        item,
+                        "id"
+                    )
+
+                    val title = firstString(
+                        item,
+                        "title",
+                        "name"
+                    )
 
                     if (id.isBlank() && title.isBlank()) {
                         null
@@ -671,7 +739,9 @@ class StalkerClient {
                 )
 
             } catch (e: Exception) {
+
                 Log.e(TAG, "fetchCategories failed", e)
+
                 postResult(
                     onResult,
                     false,
@@ -683,7 +753,30 @@ class StalkerClient {
     }
 
     // -------------------------------------------------------------------------
-    // Public: Create stream link
+    // INTERNAL CATEGORIES
+    // -------------------------------------------------------------------------
+
+    private fun fetchCategoriesInternal(
+        session: StalkerSession,
+        mac: String,
+        type: String
+    ): List<JsonObject> {
+
+        val response = request(
+            session = session,
+            mac = mac,
+            params = mapOf(
+                "type" to type,
+                "action" to "get_categories",
+                "JsHttpRequest" to "1-xml"
+            )
+        )
+
+        return extractArray(response, "js", "data")
+    }
+
+    // -------------------------------------------------------------------------
+    // CREATE LINK
     // -------------------------------------------------------------------------
 
     fun createLink(
@@ -693,7 +786,9 @@ class StalkerClient {
         onResult: (Boolean, String, String) -> Unit
     ) {
         runAsync {
+
             try {
+
                 val portal = normalizePortalUrl(portalUrl)
                 val mac = normalizeMac(macAddress)
 
@@ -712,50 +807,54 @@ class StalkerClient {
                         onResult,
                         false,
                         "",
-                        "Stream command is empty."
+                        "Stream command is missing."
                     )
                     return@runAsync
                 }
 
-                val session = getOrCreateSession(portal, mac)
+                val session = getOrCreateSession(
+                    portal,
+                    mac
+                )
 
-                /*
-                 * Important:
-                 * Do NOT pre-URL-encode cmd here.
-                 * request() performs the encoding once.
-                 */
+                val cleanCmd = decodeCommand(cmd)
+
                 val response = request(
                     session = session,
                     mac = mac,
                     params = mapOf(
                         "type" to "itv",
                         "action" to "create_link",
-                        "cmd" to cmd,
+                        "cmd" to cleanCmd,
                         "JsHttpRequest" to "1-xml"
                     )
                 )
 
-                val link = extractLink(response)
+                val streamUrl = extractStreamUrl(response)
 
-                if (link.isBlank()) {
+                if (streamUrl.isBlank()) {
+
                     postResult(
                         onResult,
                         false,
                         "",
-                        "The server did not return a playable link."
+                        "Server did not return a stream URL."
                     )
-                    return@runAsync
+
+                } else {
+
+                    postResult(
+                        onResult,
+                        true,
+                        streamUrl,
+                        "Stream link created."
+                    )
                 }
 
-                postResult(
-                    onResult,
-                    true,
-                    link,
-                    "Stream link created."
-                )
-
             } catch (e: Exception) {
+
                 Log.e(TAG, "createLink failed", e)
+
                 postResult(
                     onResult,
                     false,
@@ -767,7 +866,7 @@ class StalkerClient {
     }
 
     // -------------------------------------------------------------------------
-    // Public: Profile
+    // PROFILE
     // -------------------------------------------------------------------------
 
     fun getProfile(
@@ -776,11 +875,26 @@ class StalkerClient {
         onResult: (Boolean, Profile?, String) -> Unit
     ) {
         runAsync {
+
             try {
+
                 val portal = normalizePortalUrl(portalUrl)
                 val mac = normalizeMac(macAddress)
 
-                val session = getOrCreateSession(portal, mac)
+                if (portal.isBlank() || mac.isBlank()) {
+                    postResult(
+                        onResult,
+                        false,
+                        null,
+                        "Portal or MAC is missing."
+                    )
+                    return@runAsync
+                }
+
+                val session = getOrCreateSession(
+                    portal,
+                    mac
+                )
 
                 val response = request(
                     session = session,
@@ -792,37 +906,59 @@ class StalkerClient {
                     )
                 )
 
-                val profileObject = extractObject(response, "js")
+                val obj = extractObject(
+                    response,
+                    "js",
+                    "data"
+                )
+
+                if (obj == null) {
+
+                    postResult(
+                        onResult,
+                        false,
+                        null,
+                        "Profile not found."
+                    )
+
+                    return@runAsync
+                }
 
                 val profile = Profile(
-                    id = firstString(profileObject, "id"),
+                    id = firstString(
+                        obj,
+                        "id",
+                        "stb_id"
+                    ),
                     mac = firstString(
-                        profileObject,
+                        obj,
                         "mac",
-                        "stb_mac"
-                    ).ifBlank { mac },
+                        "mac_address"
+                    ).ifBlank {
+                        mac
+                    },
                     username = firstString(
-                        profileObject,
-                        "login",
-                        "username"
+                        obj,
+                        "username",
+                        "login"
                     ),
                     status = firstString(
-                        profileObject,
+                        obj,
                         "status"
                     ),
                     expiryDate = firstString(
-                        profileObject,
-                        "expire_billing_date",
+                        obj,
+                        "expire_date",
                         "end_date",
-                        "expiry_date"
+                        "expiration"
                     ),
                     tariffPlan = firstString(
-                        profileObject,
+                        obj,
                         "tariff_plan",
                         "plan"
                     ),
                     accountBalance = firstString(
-                        profileObject,
+                        obj,
                         "account_balance",
                         "balance"
                     )
@@ -836,7 +972,9 @@ class StalkerClient {
                 )
 
             } catch (e: Exception) {
+
                 Log.e(TAG, "getProfile failed", e)
+
                 postResult(
                     onResult,
                     false,
@@ -848,7 +986,7 @@ class StalkerClient {
     }
 
     // -------------------------------------------------------------------------
-    // Session / Handshake
+    // SESSION CREATION
     // -------------------------------------------------------------------------
 
     private fun getOrCreateSession(
@@ -856,22 +994,24 @@ class StalkerClient {
         mac: String
     ): StalkerSession {
 
-        val existing = currentSession
+        val oldSession = currentSession
 
         if (
-            existing != null &&
+            oldSession != null &&
             currentPortal == portal &&
-            currentMac == mac &&
-            existing.loadUrl.isNotBlank()
+            currentMac == mac
         ) {
-            return existing
+            return oldSession
         }
 
-        val loadUrl = discoverLoadUrl(portal)
+        val loadUrl = discoverLoadUrl(
+            portal,
+            mac
+        )
 
         val session = performHandshake(
-            loadUrl = loadUrl,
-            mac = mac
+            loadUrl,
+            mac
         )
 
         currentPortal = portal
@@ -881,67 +1021,72 @@ class StalkerClient {
         return session
     }
 
-    private fun discoverLoadUrl(portal: String): String {
-        val candidates = listOf(
-            portal.trimEnd('/') + LOAD_PATH,
-            portal.trimEnd('/') + "/server/load.php",
-            portal.trimEnd('/') + "/stalker_portal/server/load.php"
-        ).distinct()
+    // -------------------------------------------------------------------------
+    // DISCOVER LOAD URL
+    // -------------------------------------------------------------------------
 
-        for (candidate in candidates) {
-            try {
-                val connection = openConnection(
-                    candidate,
-                    mac = "",
-                    token = ""
-                )
+    private fun discoverLoadUrl(
+        portal: String,
+        mac: String
+    ): String {
 
-                connection.requestMethod = "GET"
-                connection.connect()
+        val normalized = normalizePortalUrl(
+            portal
+        )
 
-                val code = connection.responseCode
-                connection.disconnect()
-
-                if (code in 200..499) {
-                    return candidate
-                }
-            } catch (_: Exception) {
-                // Try next candidate.
-            }
+        if (
+            normalized.endsWith(
+                LOAD_PATH,
+                ignoreCase = true
+            )
+        ) {
+            return normalized
         }
 
-        return candidates.first()
+        return normalized + LOAD_PATH
     }
+
+    // -------------------------------------------------------------------------
+    // HANDSHAKE
+    // -------------------------------------------------------------------------
 
     private fun performHandshake(
         loadUrl: String,
         mac: String
     ): StalkerSession {
 
+        val random = UUID.randomUUID()
+            .toString()
+            .replace("-", "")
+
+        val params = mapOf(
+            "type" to "stb",
+            "action" to "handshake",
+            "token" to "",
+            "prehash" to "",
+            "JsHttpRequest" to "1-xml"
+        )
+
         val response = requestRaw(
             url = loadUrl,
             mac = mac,
             token = "",
-            params = mapOf(
-                "type" to "stb",
-                "action" to "handshake",
-                "token" to "",
-                "JsHttpRequest" to "1-xml"
+            params = params
+        )
+
+        val obj = extractObject(
+            response,
+            "js"
+        )
+
+        val token = if (obj != null) {
+            firstString(
+                obj,
+                "token"
             )
-        )
-
-        val js = extractObject(response, "js")
-
-        val token = firstString(
-            js,
-            "token"
-        )
-
-        val random = firstString(
-            js,
-            "random",
-            "random_value"
-        )
+        } else {
+            ""
+        }
 
         return StalkerSession(
             loadUrl = loadUrl,
@@ -951,7 +1096,7 @@ class StalkerClient {
     }
 
     // -------------------------------------------------------------------------
-    // Request
+    // REQUEST
     // -------------------------------------------------------------------------
 
     private fun request(
@@ -959,79 +1104,126 @@ class StalkerClient {
         mac: String,
         params: Map<String, String>
     ): JsonObject {
-        return requestRaw(
+
+        val response = requestRaw(
             url = session.loadUrl,
             mac = mac,
             token = session.token,
             params = params
         )
+
+        return parseJsonObject(
+            response
+        )
     }
+
+    // -------------------------------------------------------------------------
+    // RAW HTTP REQUEST
+    // -------------------------------------------------------------------------
 
     private fun requestRaw(
         url: String,
         mac: String,
         token: String,
         params: Map<String, String>
-    ): JsonObject {
+    ): String {
 
-        val query = params.entries.joinToString("&") { entry ->
-            "${urlEncode(entry.key)}=${urlEncode(entry.value)}"
+        val query = StringBuilder()
+
+        for ((key, value) in params) {
+
+            if (query.isNotEmpty()) {
+                query.append("&")
+            }
+
+            query.append(
+                URLEncoder.encode(
+                    key,
+                    "UTF-8"
+                )
+            )
+
+            query.append("=")
+
+            query.append(
+                URLEncoder.encode(
+                    value,
+                    "UTF-8"
+                )
+            )
         }
 
-        val separator = if (url.contains("?")) "&" else "?"
+        val finalUrl = if (url.contains("?")) {
+            "$url&$query"
+        } else {
+            "$url?$query"
+        }
 
-        val fullUrl = url + separator + query
-
-        val connection = openConnection(
-            fullUrl,
-            mac = mac,
-            token = token
+        Log.d(
+            TAG,
+            "Request: ${redactUrl(finalUrl)}"
         )
 
-        return try {
-            connection.requestMethod = "GET"
-            connection.connect()
+        val connection =
+            openConnection(
+                finalUrl,
+                mac,
+                token
+            )
 
-            val responseCode = connection.responseCode
+        try {
 
-            val stream =
-                if (responseCode in 200..399) {
+            val code =
+                connection.responseCode
+
+            val inputStream =
+                if (code in 200..299) {
                     connection.inputStream
                 } else {
                     connection.errorStream
                 }
 
-            val body = if (stream != null) {
+            if (inputStream == null) {
+                throw Exception(
+                    "HTTP $code: empty response"
+                )
+            }
+
+            val reader =
                 BufferedReader(
                     InputStreamReader(
-                        stream,
+                        inputStream,
                         StandardCharsets.UTF_8
                     )
-                ).use { reader ->
-                    reader.readText()
+                )
+
+            val response =
+                reader.use {
+                    it.readText()
                 }
-            } else {
-                ""
-            }
 
-            if (responseCode !in 200..399) {
-                throw RuntimeException(
-                    "HTTP $responseCode"
+            if (code !in 200..299) {
+                throw Exception(
+                    "HTTP $code"
                 )
             }
 
-            if (body.isBlank()) {
-                throw RuntimeException(
-                    "Empty server response."
-                )
-            }
+            Log.d(
+                TAG,
+                "Response length=${response.length}"
+            )
 
-            parseJsonObject(body)
+            return response
 
         } finally {
+
             connection.disconnect()
         }
     }
+
+    // -------------------------------------------------------------------------
+    // HTTP CONNECTION
+    // -------------------------------------------------------------------------
 
     private fun openConnection(
         url: String,
@@ -1040,46 +1232,48 @@ class StalkerClient {
     ): HttpURLConnection {
 
         val connection =
-            URL(url).openConnection() as HttpURLConnection
+            URL(url).openConnection()
+                    as HttpURLConnection
 
-        connection.connectTimeout = CONNECT_TIMEOUT
-        connection.readTimeout = READ_TIMEOUT
+        connection.requestMethod = "GET"
+
+        connection.connectTimeout =
+            CONNECT_TIMEOUT
+
+        connection.readTimeout =
+            READ_TIMEOUT
+
         connection.useCaches = false
+
         connection.instanceFollowRedirects = true
 
         connection.setRequestProperty(
             "User-Agent",
-            "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36"
+            "Mozilla/5.0"
         )
 
         connection.setRequestProperty(
             "Accept",
-            "application/json, text/javascript, */*; q=0.01"
+            "*/*"
         )
 
         connection.setRequestProperty(
-            "X-Requested-With",
-            "XMLHttpRequest"
+            "Connection",
+            "Keep-Alive"
         )
 
         connection.setRequestProperty(
-            "Referer",
-            URL(url).protocol + "://" + URL(url).host + "/"
+            "X-User-Agent",
+            "Model: MAG250; Link: WiFi"
         )
 
-        if (mac.isNotBlank()) {
-            connection.setRequestProperty(
-                "Cookie",
-                "mac=$mac"
-            )
-
-            connection.setRequestProperty(
-                "X-MAC",
-                mac
-            )
-        }
+        connection.setRequestProperty(
+            "Cookie",
+            "mac=$mac"
+        )
 
         if (token.isNotBlank()) {
+
             connection.setRequestProperty(
                 "Authorization",
                 "Bearer $token"
@@ -1090,79 +1284,115 @@ class StalkerClient {
     }
 
     // -------------------------------------------------------------------------
-    // Parsing
+    // JSON PARSER
+    //
+    // IMPORTANT:
+    // We intentionally use:
+    // JsonParser().parse(...)
+    //
+    // instead of:
+    // JsonParser.parseString(...)
+    //
+    // because the project's Gson version does not expose parseString().
     // -------------------------------------------------------------------------
 
-    private fun parseJsonObject(
-        text: String
-    ): JsonObject {
+    private fun parseJson(
+        raw: String
+    ): JsonElement {
 
-        val cleaned = text.trim()
+        val cleaned =
+            raw.trim()
+                .removePrefix("\uFEFF")
+
+        if (cleaned.isBlank()) {
+            throw Exception(
+                "Empty server response."
+            )
+        }
 
         return try {
-            JsonParser
-                .parseString(cleaned)
-                .asJsonObject
-        } catch (e: Exception) {
-            /*
-             * Some Stalker installations return JSON wrapped
-             * inside an XML/JS response. Try to locate the JSON object.
-             */
-            val start = cleaned.indexOf('{')
-            val end = cleaned.lastIndexOf('}')
 
-            if (start >= 0 && end > start) {
-                JsonParser
-                    .parseString(
-                        cleaned.substring(start, end + 1)
-                    )
-                    .asJsonObject
-            } else {
-                throw e
-            }
+            JsonParser()
+                .parse(cleaned)
+
+        } catch (e: Exception) {
+
+            throw Exception(
+                "Invalid JSON response: ${e.message}"
+            )
         }
     }
 
+    private fun parseJsonObject(
+        raw: String
+    ): JsonObject {
+
+        val element =
+            parseJson(raw)
+
+        if (!element.isJsonObject) {
+
+            throw Exception(
+                "Server response is not a JSON object."
+            )
+        }
+
+        return element.asJsonObject
+    }
+
+    // -------------------------------------------------------------------------
+    // JSON HELPERS
+    // -------------------------------------------------------------------------
+
     private fun extractArray(
-        root: JsonObject,
-        key: String
+        obj: JsonObject,
+        vararg keys: String
     ): List<JsonObject> {
 
-        val element = root.get(key)
+        for (key in keys) {
 
-        if (element == null || element.isJsonNull) {
-            return emptyList()
-        }
+            if (!obj.has(key)) {
+                continue
+            }
 
-        if (element.isJsonArray) {
-            return element.asJsonArray
-                .mapNotNull {
-                    if (it.isJsonObject) {
-                        it.asJsonObject
-                    } else {
-                        null
+            val element =
+                obj.get(key)
+
+            if (element == null ||
+                element.isJsonNull
+            ) {
+                continue
+            }
+
+            if (element.isJsonArray) {
+
+                return element.asJsonArray
+                    .mapNotNull {
+                        if (it.isJsonObject) {
+                            it.asJsonObject
+                        } else {
+                            null
+                        }
                     }
-                }
-        }
+            }
 
-        if (element.isJsonObject) {
-            val nested = element.asJsonObject
+            if (element.isJsonObject) {
 
-            val possibleKeys = listOf(
-                "data",
-                "items",
-                "results",
-                "js"
-            )
+                val nested =
+                    element.asJsonObject
 
-            for (nestedKey in possibleKeys) {
-                val nestedElement = nested.get(nestedKey)
+                val nestedArray =
+                    findFirstArray(
+                        nested,
+                        "data",
+                        "js",
+                        "items",
+                        "results"
+                    )
 
-                if (
-                    nestedElement != null &&
-                    nestedElement.isJsonArray
-                ) {
-                    return nestedElement.asJsonArray
+                if (nestedArray != null) {
+
+                    return nestedArray
                         .mapNotNull {
                             if (it.isJsonObject) {
                                 it.asJsonObject
@@ -1177,183 +1407,69 @@ class StalkerClient {
         return emptyList()
     }
 
+    private fun findFirstArray(
+        obj: JsonObject,
+        vararg keys: String
+    ): JsonArray? {
+
+        for (key in keys) {
+
+            val element =
+                obj.get(key)
+                    ?: continue
+
+            if (
+                !element.isJsonNull &&
+                element.isJsonArray
+            ) {
+                return element.asJsonArray
+            }
+        }
+
+        return null
+    }
+
     private fun extractObject(
-        root: JsonObject,
+        obj: JsonObject,
+        vararg keys: String
+    ): JsonObject? {
+
+        for (key in keys) {
+
+            val element =
+                obj.get(key)
+                    ?: continue
+
+            if (
+                !element.isJsonNull &&
+                element.isJsonObject
+            ) {
+                return element.asJsonObject
+            }
+        }
+
+        return null
+    }
+
+    private fun jsonString(
+        obj: JsonObject,
         key: String
-    ): JsonObject {
-
-        val element = root.get(key)
-
-        if (element != null && element.isJsonObject) {
-            return element.asJsonObject
-        }
-
-        return JsonObject()
-    }
-
-    private fun parseSeasons(
-        response: JsonObject
-    ): List<SeriesSeason> {
-
-        val arrays = listOf(
-            extractArray(response, "js"),
-            extractArray(response, "data")
-        )
-
-        for (array in arrays) {
-            if (array.isNotEmpty()) {
-                return array.mapIndexedNotNull { index, item ->
-
-                    val id = firstString(
-                        item,
-                        "id",
-                        "season_id"
-                    )
-
-                    val number = firstString(
-                        item,
-                        "season",
-                        "season_number",
-                        "number"
-                    ).toIntOrNull()
-                        ?: (index + 1)
-
-                    val name = firstString(
-                        item,
-                        "name",
-                        "title"
-                    ).ifBlank {
-                        "Season $number"
-                    }
-
-                    if (id.isBlank() && name.isBlank()) {
-                        null
-                    } else {
-                        SeriesSeason(
-                            id = id,
-                            name = name,
-                            seasonNumber = number
-                        )
-                    }
-                }
-            }
-        }
-
-        return emptyList()
-    }
-
-    private fun parseEpisodes(
-        response: JsonObject
-    ): List<SeriesEpisode> {
-
-        val arrays = listOf(
-            extractArray(response, "js"),
-            extractArray(response, "data")
-        )
-
-        for (array in arrays) {
-            if (array.isNotEmpty()) {
-                return array.mapIndexedNotNull { index, item ->
-
-                    val id = firstString(
-                        item,
-                        "id",
-                        "episode_id"
-                    )
-
-                    val episodeNumber =
-                        firstString(
-                            item,
-                            "episode",
-                            "episode_number",
-                            "number"
-                        ).toIntOrNull()
-                            ?: (index + 1)
-
-                    val seasonNumber =
-                        firstString(
-                            item,
-                            "season",
-                            "season_number"
-                        ).toIntOrNull()
-                            ?: 0
-
-                    val name = firstString(
-                        item,
-                        "name",
-                        "title"
-                    ).ifBlank {
-                        "Episode $episodeNumber"
-                    }
-
-                    if (id.isBlank() && name.isBlank()) {
-                        null
-                    } else {
-                        SeriesEpisode(
-                            id = id,
-                            name = name,
-                            episodeNumber = episodeNumber,
-                            seasonNumber = seasonNumber,
-                            cmd = firstString(
-                                item,
-                                "cmd",
-                                "command"
-                            ),
-                            logo = firstString(
-                                item,
-                                "logo",
-                                "icon"
-                            ),
-                            description = firstString(
-                                item,
-                                "description",
-                                "descr",
-                                "plot"
-                            )
-                        )
-                    }
-                }
-            }
-        }
-
-        return emptyList()
-    }
-
-    private fun extractLink(
-        response: JsonObject
     ): String {
 
-        val candidates = mutableListOf<String>()
-
-        val rootJs = response.get("js")
-
-        if (rootJs != null) {
-            if (rootJs.isJsonObject) {
-                val obj = rootJs.asJsonObject
-
-                candidates += firstString(
-                    obj,
-                    "cmd",
-                    "link",
-                    "url",
-                    "stream_url"
-                )
-            } else if (rootJs.isJsonPrimitive) {
-                candidates += rootJs.asString
+        return if (
+            obj.has(key) &&
+            !obj.get(key).isJsonNull
+        ) {
+            try {
+                obj.get(key).asString
+            } catch (
+                _: Exception
+            ) {
+                ""
             }
+        } else {
+            ""
         }
-
-        candidates += firstString(
-            response,
-            "cmd",
-            "link",
-            "url"
-        )
-
-        return candidates
-            .map { it.trim() }
-            .firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
-            ?: ""
     }
 
     private fun firstString(
@@ -1362,30 +1478,275 @@ class StalkerClient {
     ): String {
 
         for (key in keys) {
-            val value = obj.get(key)
-                ?: continue
 
-            if (value.isJsonNull) {
-                continue
-            }
+            val value =
+                jsonString(
+                    obj,
+                    key
+                )
 
-            if (value.isJsonPrimitive) {
-                return value.asString
+            if (value.isNotBlank()) {
+                return value
             }
         }
 
         return ""
     }
 
-    private fun jsonString(
-        obj: JsonObject,
-        key: String
+    // -------------------------------------------------------------------------
+    // STREAM URL
+    // -------------------------------------------------------------------------
+
+    private fun extractStreamUrl(
+        response: JsonObject
     ): String {
-        return firstString(obj, key)
+
+        val directKeys =
+            arrayOf(
+                "cmd",
+                "url",
+                "link",
+                "stream_url",
+                "play_url"
+            )
+
+        for (key in directKeys) {
+
+            val value =
+                jsonString(
+                    response,
+                    key
+                )
+
+            if (
+                value.startsWith(
+                    "http://",
+                    true
+                ) ||
+                value.startsWith(
+                    "https://",
+                    true
+                )
+            ) {
+                return value
+            }
+        }
+
+        val js =
+            extractObject(
+                response,
+                "js"
+            )
+
+        if (js != null) {
+
+            for (key in directKeys) {
+
+                val value =
+                    jsonString(
+                        js,
+                        key
+                    )
+
+                if (
+                    value.startsWith(
+                        "http://",
+                        true
+                    ) ||
+                    value.startsWith(
+                        "https://",
+                        true
+                    )
+                ) {
+                    return value
+                }
+            }
+        }
+
+        val data =
+            extractObject(
+                response,
+                "data"
+            )
+
+        if (data != null) {
+
+            for (key in directKeys) {
+
+                val value =
+                    jsonString(
+                        data,
+                        key
+                    )
+
+                if (
+                    value.startsWith(
+                        "http://",
+                        true
+                    ) ||
+                    value.startsWith(
+                        "https://",
+                        true
+                    )
+                ) {
+                    return value
+                }
+            }
+        }
+
+        return ""
     }
 
     // -------------------------------------------------------------------------
-    // Pagination
+    // SERIES PARSING
+    // -------------------------------------------------------------------------
+
+    private fun parseSeasons(
+        response: JsonObject
+    ): List<SeriesSeason> {
+
+        val items =
+            extractArray(
+                response,
+                "js",
+                "data"
+            )
+
+        return items.mapIndexedNotNull {
+                index,
+                item ->
+
+            val id =
+                firstString(
+                    item,
+                    "id",
+                    "season_id"
+                )
+
+            val name =
+                firstString(
+                    item,
+                    "name",
+                    "title"
+                )
+
+            if (
+                id.isBlank() &&
+                name.isBlank()
+            ) {
+                null
+            } else {
+
+                val number =
+                    firstString(
+                        item,
+                        "season",
+                        "season_number",
+                        "number"
+                    ).toIntOrNull()
+                        ?: (index + 1)
+
+                SeriesSeason(
+                    id = id,
+                    name =
+                        name.ifBlank {
+                            "Season $number"
+                        },
+                    seasonNumber = number
+                )
+            }
+        }
+    }
+
+    private fun parseEpisodes(
+        response: JsonObject
+    ): List<SeriesEpisode> {
+
+        val items =
+            extractArray(
+                response,
+                "js",
+                "data"
+            )
+
+        return items.mapIndexedNotNull {
+                index,
+                item ->
+
+            val id =
+                firstString(
+                    item,
+                    "id",
+                    "episode_id"
+                )
+
+            val name =
+                firstString(
+                    item,
+                    "name",
+                    "title"
+                )
+
+            if (
+                id.isBlank() &&
+                name.isBlank()
+            ) {
+                null
+            } else {
+
+                val episodeNumber =
+                    firstString(
+                        item,
+                        "episode",
+                        "episode_number",
+                        "number"
+                    ).toIntOrNull()
+                        ?: (index + 1)
+
+                val seasonNumber =
+                    firstString(
+                        item,
+                        "season",
+                        "season_number"
+                    ).toIntOrNull()
+                        ?: 0
+
+                SeriesEpisode(
+                    id = id,
+                    name =
+                        name.ifBlank {
+                            "Episode $episodeNumber"
+                        },
+                    episodeNumber =
+                        episodeNumber,
+                    seasonNumber =
+                        seasonNumber,
+                    cmd =
+                        firstString(
+                            item,
+                            "cmd",
+                            "command"
+                        ),
+                    logo =
+                        firstString(
+                            item,
+                            "logo",
+                            "icon"
+                        ),
+                    description =
+                        firstString(
+                            item,
+                            "description",
+                            "descr",
+                            "plot"
+                        )
+                )
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // PAGINATION
     // -------------------------------------------------------------------------
 
     private fun hasMorePages(
@@ -1397,138 +1758,208 @@ class StalkerClient {
             return false
         }
 
-        val js = response.get("js")
+        if (itemCount < DEFAULT_PAGE_SIZE) {
+            return false
+        }
 
-        if (js != null && js.isJsonObject) {
-            val obj = js.asJsonObject
+        val js =
+            extractObject(
+                response,
+                "js"
+            )
 
-            val total = firstString(
-                obj,
-                "total_items",
-                "total",
-                "count"
-            ).toIntOrNull()
+        if (js != null) {
 
-            val pageItems = firstString(
-                obj,
-                "items_per_page",
-                "page_items",
-                "limit"
-            ).toIntOrNull()
+            val total =
+                firstString(
+                    js,
+                    "total_items",
+                    "total",
+                    "count"
+                ).toIntOrNull()
 
-            if (total != null && pageItems != null) {
-                return itemCount >= pageItems
+            if (total != null &&
+                total <= itemCount
+            ) {
+                return false
             }
         }
 
-        val data = response.get("data")
-
-        if (data != null && data.isJsonObject) {
-            val obj = data.asJsonObject
-
-            val total = firstString(
-                obj,
-                "total_items",
-                "total",
-                "count"
-            ).toIntOrNull()
-
-            if (total != null) {
-                return itemCount < total
-            }
-        }
-
-        /*
-         * If the server gives no pagination metadata,
-         * a full page usually means there may be another page.
-         */
-        return itemCount >= DEFAULT_PAGE_SIZE
+        return true
     }
 
     // -------------------------------------------------------------------------
-    // Helpers
+    // COMMAND
+    // -------------------------------------------------------------------------
+
+    private fun decodeCommand(
+        command: String
+    ): String {
+
+        var result =
+            command.trim()
+
+        repeat(2) {
+
+            val decoded =
+                try {
+                    java.net.URLDecoder.decode(
+                        result,
+                        "UTF-8"
+                    )
+                } catch (
+                    _: Exception
+                ) {
+                    result
+                }
+
+            if (decoded == result) {
+                return@repeat
+            }
+
+            result = decoded
+        }
+
+        return result
+    }
+
+    // -------------------------------------------------------------------------
+    // NORMALIZATION
     // -------------------------------------------------------------------------
 
     private fun normalizePortalUrl(
         value: String
     ): String {
 
-        var portal = value.trim()
+        var portal =
+            value.trim()
 
         if (portal.isBlank()) {
             return ""
         }
 
-        if (!portal.startsWith("http://") &&
-            !portal.startsWith("https://")
+        if (
+            !portal.startsWith(
+                "http://",
+                true
+            ) &&
+            !portal.startsWith(
+                "https://",
+                true
+            )
         ) {
-            portal = "http://$portal"
+            portal =
+                "http://$portal"
         }
 
-        return portal.trimEnd('/')
+        while (
+            portal.endsWith("/")
+        ) {
+            portal =
+                portal.dropLast(1)
+        }
+
+        if (
+            portal.endsWith(
+                LOAD_PATH,
+                true
+            )
+        ) {
+            return portal
+        }
+
+        return portal
     }
 
     private fun normalizeMac(
         value: String
     ): String {
+
         return value
             .trim()
             .uppercase()
+            .replace(
+                " ",
+                ""
+            )
     }
 
-    private fun urlEncode(
-        value: String
-    ): String {
-        return URLEncoder.encode(
-            value,
-            StandardCharsets.UTF_8.name()
-        )
-    }
-
-    private fun safeError(
-        exception: Exception
-    ): String {
-
-        val message = exception.message
-            ?.trim()
-            .orEmpty()
-
-        return when {
-            message.isBlank() ->
-                "Connection error."
-
-            message.length > 250 ->
-                message.take(250)
-
-            else ->
-                message
-        }
-    }
+    // -------------------------------------------------------------------------
+    // ASYNC
+    // -------------------------------------------------------------------------
 
     private fun runAsync(
         block: () -> Unit
     ) {
-        Thread {
-            try {
-                block()
-            } catch (e: Exception) {
-                Log.e(TAG, "Background operation failed", e)
-            }
-        }.start()
+
+        thread(
+            name = "StalkerClient"
+        ) {
+            block()
+        }
     }
 
     private fun <T> postResult(
         callback: (Boolean, T, String) -> Unit,
         success: Boolean,
-        data: T,
+        value: T,
         message: String
     ) {
+
         mainHandler.post {
+
             callback(
                 success,
-                data,
+                value,
                 message
             )
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // ERRORS
+    // -------------------------------------------------------------------------
+
+    private fun safeError(
+        throwable: Throwable
+    ): String {
+
+        val message =
+            throwable.message
+                ?.trim()
+                .orEmpty()
+
+        return if (
+            message.isNotBlank()
+        ) {
+            message
+        } else {
+            throwable.javaClass.simpleName
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // LOG REDACTION
+    // -------------------------------------------------------------------------
+
+    private fun redactUrl(
+        url: String
+    ): String {
+
+        return url
+            .replace(
+                Regex(
+                    "(mac=)[^&]+",
+                    RegexOption.IGNORE_CASE
+                ),
+                "$1***"
+            )
+            .replace(
+                Regex(
+                    "(token=)[^&]+",
+                    RegexOption.IGNORE_CASE
+                ),
+                "$1***"
+            )
     }
 }
