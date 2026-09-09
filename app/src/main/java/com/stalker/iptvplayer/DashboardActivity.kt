@@ -13,9 +13,11 @@ import androidx.appcompat.app.AppCompatActivity
 
 class DashboardActivity : AppCompatActivity() {
 
-    private lateinit var channelList: ListView
+    private lateinit var itemList: ListView
     private lateinit var loading: ProgressBar
     private lateinit var statusText: TextView
+
+    private val client = StalkerClient()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,27 +31,74 @@ class DashboardActivity : AppCompatActivity() {
         val btnSeries = findViewById<Button>(R.id.btn_series)
         val btnSettings = findViewById<Button>(R.id.btn_settings)
 
-        channelList = findViewById(R.id.channel_list)
+        itemList = findViewById(R.id.channel_list)
         loading = findViewById(R.id.loading)
         statusText = findViewById(R.id.status_text)
 
-        btnLiveTv.setOnClickListener {
-
-            if (portalUrl.isEmpty() || macAddress.isEmpty()) {
+        fun validLogin(): Boolean {
+            if (portalUrl.isBlank() || macAddress.isBlank()) {
                 Toast.makeText(
                     this,
                     "Missing portal details. Please re-login.",
                     Toast.LENGTH_LONG
                 ).show()
+                return false
+            }
+
+            return true
+        }
+
+        fun showLoading(message: String) {
+            loading.visibility = View.VISIBLE
+            itemList.visibility = View.GONE
+            statusText.visibility = View.VISIBLE
+            statusText.text = message
+        }
+
+        fun showItems(
+            title: String,
+            names: List<String>,
+            emptyMessage: String
+        ) {
+            loading.visibility = View.GONE
+            statusText.visibility = View.VISIBLE
+
+            if (names.isNotEmpty()) {
+
+                statusText.text = "$title — ${names.size}"
+
+                itemList.adapter = ArrayAdapter(
+                    this,
+                    android.R.layout.simple_list_item_1,
+                    names
+                )
+
+                itemList.visibility = View.VISIBLE
+
+            } else {
+
+                itemList.visibility = View.GONE
+                statusText.text = emptyMessage
+
+                Toast.makeText(
+                    this,
+                    emptyMessage,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
+        // ============================================================
+        // LIVE TV
+        // ============================================================
+
+        btnLiveTv.setOnClickListener {
+
+            if (!validLogin()) {
                 return@setOnClickListener
             }
 
-            loading.visibility = View.VISIBLE
-            channelList.visibility = View.GONE
-            statusText.visibility = View.VISIBLE
-            statusText.text = "Loading Live TV..."
-
-            val client = StalkerClient()
+            showLoading("Loading Live TV...")
 
             client.fetchChannels(
                 portalUrl = portalUrl,
@@ -58,66 +107,121 @@ class DashboardActivity : AppCompatActivity() {
 
                 runOnUiThread {
 
-                    loading.visibility = View.GONE
+                    if (success) {
 
-                    if (success && channels.isNotEmpty()) {
-
-                        statusText.text =
-                            "Live TV — ${channels.size} channels"
-
-                        val names = channels.map { channel ->
-                            channel.name
-                        }
-
-                        val adapter = ArrayAdapter(
-                            this,
-                            android.R.layout.simple_list_item_1,
-                            names
+                        showItems(
+                            title = "Live TV",
+                            names = channels.map { it.name },
+                            emptyMessage = "No Live TV channels were found."
                         )
-
-                        channelList.adapter = adapter
-                        channelList.visibility = View.VISIBLE
 
                     } else {
 
-                        channelList.visibility = View.GONE
-                        statusText.text = message
-
-                        Toast.makeText(
-                            this,
-                            message,
-                            Toast.LENGTH_LONG
-                        ).show()
+                        showItems(
+                            title = "Live TV",
+                            names = emptyList(),
+                            emptyMessage = message
+                        )
                     }
                 }
             }
         }
 
+        // ============================================================
+        // MOVIES / VOD
+        // ============================================================
+
         btnMovies.setOnClickListener {
-            Toast.makeText(
-                this,
-                "Movies module coming next.",
-                Toast.LENGTH_SHORT
-            ).show()
+
+            if (!validLogin()) {
+                return@setOnClickListener
+            }
+
+            showLoading("Loading Movies...")
+
+            client.fetchMovies(
+                portalUrl = portalUrl,
+                macAddress = macAddress
+            ) { success, movies, message ->
+
+                runOnUiThread {
+
+                    if (success) {
+
+                        showItems(
+                            title = "Movies",
+                            names = movies.map { it.name },
+                            emptyMessage = "No Movies/VOD were found."
+                        )
+
+                    } else {
+
+                        showItems(
+                            title = "Movies",
+                            names = emptyList(),
+                            emptyMessage = message
+                        )
+                    }
+                }
+            }
         }
+
+        // ============================================================
+        // SERIES
+        // ============================================================
 
         btnSeries.setOnClickListener {
-            Toast.makeText(
-                this,
-                "Series module coming next.",
-                Toast.LENGTH_SHORT
-            ).show()
+
+            if (!validLogin()) {
+                return@setOnClickListener
+            }
+
+            showLoading("Loading Series...")
+
+            client.fetchSeries(
+                portalUrl = portalUrl,
+                macAddress = macAddress
+            ) { success, series, message ->
+
+                runOnUiThread {
+
+                    if (success) {
+
+                        showItems(
+                            title = "Series",
+                            names = series.map { it.name },
+                            emptyMessage = "No Series were found."
+                        )
+
+                    } else {
+
+                        showItems(
+                            title = "Series",
+                            names = emptyList(),
+                            emptyMessage = message
+                        )
+                    }
+                }
+            }
         }
 
+        // ============================================================
+        // SETTINGS
+        // ============================================================
+
         btnSettings.setOnClickListener {
+
             startActivity(
                 Intent(this, MainActivity::class.java)
             )
+
             finish()
         }
 
+        // Initial state
+
         statusText.visibility = View.GONE
         loading.visibility = View.GONE
-        channelList.visibility = View.GONE
+        itemList.visibility = View.GONE
     }
 }
