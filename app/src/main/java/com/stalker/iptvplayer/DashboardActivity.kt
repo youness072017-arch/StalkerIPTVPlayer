@@ -42,6 +42,7 @@ class DashboardActivity : AppCompatActivity() {
                     "Missing portal details. Please re-login.",
                     Toast.LENGTH_LONG
                 ).show()
+
                 return false
             }
 
@@ -53,6 +54,19 @@ class DashboardActivity : AppCompatActivity() {
             itemList.visibility = View.GONE
             statusText.visibility = View.VISIBLE
             statusText.text = message
+        }
+
+        fun showError(message: String) {
+            loading.visibility = View.GONE
+            itemList.visibility = View.GONE
+            statusText.visibility = View.VISIBLE
+            statusText.text = message
+
+            Toast.makeText(
+                this,
+                message,
+                Toast.LENGTH_LONG
+            ).show()
         }
 
         fun showItems(
@@ -101,30 +115,25 @@ class DashboardActivity : AppCompatActivity() {
             showLoading("Loading Live TV...")
 
             client.fetchChannels(
-                portalUrl = portalUrl,
-                macAddress = macAddress
-            ) { success, channels, message ->
+                portal = portalUrl,
+                mac = macAddress,
 
-                runOnUiThread {
+                callback = { channels ->
 
-                    if (success) {
+                    showItems(
+                        title = "Live TV",
+                        names = channels.map { it.name },
+                        emptyMessage = "No Live TV channels were found."
+                    )
+                },
 
-                        showItems(
-                            title = "Live TV",
-                            names = channels.map { it.name },
-                            emptyMessage = "No Live TV channels were found."
-                        )
+                errorCallback = { message ->
 
-                    } else {
-
-                        showItems(
-                            title = "Live TV",
-                            names = emptyList(),
-                            emptyMessage = message
-                        )
-                    }
+                    showError(
+                        "Live TV error: $message"
+                    )
                 }
-            }
+            )
         }
 
         // ============================================================
@@ -140,30 +149,25 @@ class DashboardActivity : AppCompatActivity() {
             showLoading("Loading Movies...")
 
             client.fetchMovies(
-                portalUrl = portalUrl,
-                macAddress = macAddress
-            ) { success, movies, message ->
+                portal = portalUrl,
+                mac = macAddress,
 
-                runOnUiThread {
+                callback = { movies ->
 
-                    if (success) {
+                    showItems(
+                        title = "Movies",
+                        names = movies.map { it.name },
+                        emptyMessage = "No Movies/VOD were found."
+                    )
+                },
 
-                        showItems(
-                            title = "Movies",
-                            names = movies.map { it.name },
-                            emptyMessage = "No Movies/VOD were found."
-                        )
+                errorCallback = { message ->
 
-                    } else {
-
-                        showItems(
-                            title = "Movies",
-                            names = emptyList(),
-                            emptyMessage = message
-                        )
-                    }
+                    showError(
+                        "Movies error: $message"
+                    )
                 }
-            }
+            )
         }
 
         // ============================================================
@@ -179,46 +183,46 @@ class DashboardActivity : AppCompatActivity() {
             showLoading("Loading Series...")
 
             client.fetchSeries(
-                portalUrl = portalUrl,
-                macAddress = macAddress
-            ) { success, series, message ->
+                portal = portalUrl,
+                mac = macAddress,
 
-                runOnUiThread {
+                callback = { series ->
 
-                    if (success) {
+                    showItems(
+                        title = "Series",
+                        names = series.map { it.name },
+                        emptyMessage = "No Series were found."
+                    )
+                },
 
-                        showItems(
-                            title = "Series",
-                            names = series.map { it.name },
-                            emptyMessage = "No Series were found."
-                        )
+                errorCallback = { message ->
 
-                    } else {
-
-                        showItems(
-                            title = "Series",
-                            names = emptyList(),
-                            emptyMessage = message
-                        )
-                    }
+                    showError(
+                        "Series error: $message"
+                    )
                 }
-            }
+            )
         }
 
         // ============================================================
-        // SETTINGS
+        // SETTINGS / LOGIN
         // ============================================================
 
         btnSettings.setOnClickListener {
 
             startActivity(
-                Intent(this, MainActivity::class.java)
+                Intent(
+                    this,
+                    MainActivity::class.java
+                )
             )
 
             finish()
         }
 
-        // Initial state
+        // ============================================================
+        // INITIAL STATE
+        // ============================================================
 
         statusText.visibility = View.GONE
         loading.visibility = View.GONE
