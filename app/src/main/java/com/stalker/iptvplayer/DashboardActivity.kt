@@ -1,7 +1,6 @@
 package com.stalker.iptvplayer
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
@@ -43,7 +42,6 @@ class DashboardActivity : AppCompatActivity() {
                     "Missing portal details. Please re-login.",
                     Toast.LENGTH_LONG
                 ).show()
-
                 return false
             }
 
@@ -71,22 +69,27 @@ class DashboardActivity : AppCompatActivity() {
         }
 
         /*
-         * ------------------------------------------------------------
-         * PLAYBACK
-         * ------------------------------------------------------------
+         * ============================================================
+         * OPEN PLAYER
+         * ============================================================
          *
-         * Stalker لا يعطي دائما رابط التشغيل النهائي داخل القائمة.
+         * Stalker:
          *
-         * أولا ناخدو cmd من العنصر.
-         * ثم createLink() يطلب من السيرفر رابط التشغيل الحقيقي.
-         * ثم نفتح الرابط باستعمال Android player/أي player يدعم الرابط.
+         * item.cmd
+         *     ↓
+         * createLink()
+         *     ↓
+         * final stream URL
+         *     ↓
+         * PlayerActivity
+         *     ↓
+         * Media3 ExoPlayer
          */
         fun playStream(
             name: String,
             cmd: String,
             type: String
         ) {
-
             if (cmd.isBlank()) {
                 Toast.makeText(
                     this,
@@ -99,7 +102,7 @@ class DashboardActivity : AppCompatActivity() {
 
             loading.visibility = View.VISIBLE
             statusText.visibility = View.VISIBLE
-            statusText.text = "Opening: $name"
+            statusText.text = "Preparing: $name"
 
             client.createLink(
                 portal = portalUrl,
@@ -112,7 +115,6 @@ class DashboardActivity : AppCompatActivity() {
                     loading.visibility = View.GONE
 
                     if (link.isBlank()) {
-
                         Toast.makeText(
                             this,
                             "Playback link is empty.",
@@ -122,27 +124,36 @@ class DashboardActivity : AppCompatActivity() {
                         return@createLink
                     }
 
+                    /*
+                     * مهم:
+                     *
+                     * ما بقيناش نستعملو ACTION_VIEW.
+                     *
+                     * الرابط كيمشي مباشرة لـ PlayerActivity
+                     * اللي غادي تستعمل Media3 ExoPlayer.
+                     */
                     try {
-
-                        /*
-                         * فتح الرابط مع Android player.
-                         *
-                         * ما نفرضوش Player معين داخل التطبيق
-                         * في هذه المرحلة، باش نتأكد أن السيرفر
-                         * كيعطي فعلا رابط صالح للتشغيل.
-                         */
-                        val intent = Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse(link)
+                        val playerIntent = Intent(
+                            this,
+                            PlayerActivity::class.java
                         )
 
-                        startActivity(intent)
+                        playerIntent.putExtra(
+                            "STREAM_URL",
+                            link
+                        )
+
+                        playerIntent.putExtra(
+                            "TITLE",
+                            name
+                        )
+
+                        startActivity(playerIntent)
 
                     } catch (e: Exception) {
-
                         Toast.makeText(
                             this,
-                            "No video player found.",
+                            "Unable to open internal player: ${e.message}",
                             Toast.LENGTH_LONG
                         ).show()
                     }
@@ -151,10 +162,8 @@ class DashboardActivity : AppCompatActivity() {
                 errorCallback = { message ->
 
                     loading.visibility = View.GONE
-
                     statusText.visibility = View.VISIBLE
-                    statusText.text =
-                        "Playback error: $message"
+                    statusText.text = "Playback error: $message"
 
                     Toast.makeText(
                         this,
@@ -163,41 +172,6 @@ class DashboardActivity : AppCompatActivity() {
                     ).show()
                 }
             )
-        }
-
-        fun showItems(
-            title: String,
-            names: List<String>,
-            emptyMessage: String
-        ) {
-
-            loading.visibility = View.GONE
-            statusText.visibility = View.VISIBLE
-
-            if (names.isNotEmpty()) {
-
-                statusText.text =
-                    "$title — ${names.size}"
-
-                itemList.adapter = ArrayAdapter(
-                    this,
-                    android.R.layout.simple_list_item_1,
-                    names
-                )
-
-                itemList.visibility = View.VISIBLE
-
-            } else {
-
-                itemList.visibility = View.GONE
-                statusText.text = emptyMessage
-
-                Toast.makeText(
-                    this,
-                    emptyMessage,
-                    Toast.LENGTH_LONG
-                ).show()
-            }
         }
 
         // ============================================================
@@ -240,8 +214,7 @@ class DashboardActivity : AppCompatActivity() {
                     statusText.text =
                         "Live TV — ${channels.size}"
 
-                    val names =
-                        channels.map { it.name }
+                    val names = channels.map { it.name }
 
                     itemList.adapter = ArrayAdapter(
                         this,
@@ -251,25 +224,13 @@ class DashboardActivity : AppCompatActivity() {
 
                     itemList.visibility = View.VISIBLE
 
-                    /*
-                     * مهم جدا:
-                     *
-                     * هنا كان المشكل.
-                     *
-                     * قبل كان عندنا فقط أسماء القنوات.
-                     * دابا الضغط على الاسم كيرجع للـChannel
-                     * الأصلي باش ناخدو cmd الحقيقي.
-                     */
                     itemList.setOnItemClickListener { _, _, position, _ ->
 
-                        if (position < 0 ||
-                            position >= channels.size
-                        ) {
+                        if (position < 0 || position >= channels.size) {
                             return@setOnItemClickListener
                         }
 
-                        val channel =
-                            channels[position]
+                        val channel = channels[position]
 
                         playStream(
                             name = channel.name,
@@ -280,10 +241,7 @@ class DashboardActivity : AppCompatActivity() {
                 },
 
                 errorCallback = { message ->
-
-                    showError(
-                        "Live TV error: $message"
-                    )
+                    showError("Live TV error: $message")
                 }
             )
         }
@@ -328,8 +286,7 @@ class DashboardActivity : AppCompatActivity() {
                     statusText.text =
                         "Movies — ${movies.size}"
 
-                    val names =
-                        movies.map { it.name }
+                    val names = movies.map { it.name }
 
                     itemList.adapter = ArrayAdapter(
                         this,
@@ -339,19 +296,13 @@ class DashboardActivity : AppCompatActivity() {
 
                     itemList.visibility = View.VISIBLE
 
-                    /*
-                     * تشغيل الفيلم.
-                     */
                     itemList.setOnItemClickListener { _, _, position, _ ->
 
-                        if (position < 0 ||
-                            position >= movies.size
-                        ) {
+                        if (position < 0 || position >= movies.size) {
                             return@setOnItemClickListener
                         }
 
-                        val movie =
-                            movies[position]
+                        val movie = movies[position]
 
                         playStream(
                             name = movie.name,
@@ -362,10 +313,7 @@ class DashboardActivity : AppCompatActivity() {
                 },
 
                 errorCallback = { message ->
-
-                    showError(
-                        "Movies error: $message"
-                    )
+                    showError("Movies error: $message")
                 }
             )
         }
@@ -410,8 +358,7 @@ class DashboardActivity : AppCompatActivity() {
                     statusText.text =
                         "Series — ${series.size}"
 
-                    val names =
-                        series.map { it.name }
+                    val names = series.map { it.name }
 
                     itemList.adapter = ArrayAdapter(
                         this,
@@ -422,24 +369,27 @@ class DashboardActivity : AppCompatActivity() {
                     itemList.visibility = View.VISIBLE
 
                     /*
-                     * Series مختلفة عن Live TV / Movies:
+                     * Series ماشي تشغيل مباشر.
                      *
-                     * الضغط على Series خاصو يفتح Seasons
-                     * ثم Episodes.
+                     * Series
+                     *   ↓
+                     * Seasons
+                     *   ↓
+                     * Episodes
+                     *   ↓
+                     * createLink()
+                     *   ↓
+                     * PlayerActivity
                      *
-                     * ما غاديش نخليه يشغل مباشرة هنا لأن
-                     * SeriesItem ما عندوش cmd.
+                     * غادي نبنيو هاد المرحلة من بعد.
                      */
                     itemList.setOnItemClickListener { _, _, position, _ ->
 
-                        if (position < 0 ||
-                            position >= series.size
-                        ) {
+                        if (position < 0 || position >= series.size) {
                             return@setOnItemClickListener
                         }
 
-                        val selectedSeries =
-                            series[position]
+                        val selectedSeries = series[position]
 
                         Toast.makeText(
                             this,
@@ -450,10 +400,7 @@ class DashboardActivity : AppCompatActivity() {
                 },
 
                 errorCallback = { message ->
-
-                    showError(
-                        "Series error: $message"
-                    )
+                    showError("Series error: $message")
                 }
             )
         }
