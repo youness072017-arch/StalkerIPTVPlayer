@@ -1,6 +1,7 @@
 package com.stalker.iptvplayer
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
@@ -69,17 +70,114 @@ class DashboardActivity : AppCompatActivity() {
             ).show()
         }
 
+        /*
+         * ------------------------------------------------------------
+         * PLAYBACK
+         * ------------------------------------------------------------
+         *
+         * Stalker لا يعطي دائما رابط التشغيل النهائي داخل القائمة.
+         *
+         * أولا ناخدو cmd من العنصر.
+         * ثم createLink() يطلب من السيرفر رابط التشغيل الحقيقي.
+         * ثم نفتح الرابط باستعمال Android player/أي player يدعم الرابط.
+         */
+        fun playStream(
+            name: String,
+            cmd: String,
+            type: String
+        ) {
+
+            if (cmd.isBlank()) {
+                Toast.makeText(
+                    this,
+                    "No playback command found for:\n$name",
+                    Toast.LENGTH_LONG
+                ).show()
+
+                return
+            }
+
+            loading.visibility = View.VISIBLE
+            statusText.visibility = View.VISIBLE
+            statusText.text = "Opening: $name"
+
+            client.createLink(
+                portal = portalUrl,
+                mac = macAddress,
+                cmd = cmd,
+                type = type,
+
+                callback = { link ->
+
+                    loading.visibility = View.GONE
+
+                    if (link.isBlank()) {
+
+                        Toast.makeText(
+                            this,
+                            "Playback link is empty.",
+                            Toast.LENGTH_LONG
+                        ).show()
+
+                        return@createLink
+                    }
+
+                    try {
+
+                        /*
+                         * فتح الرابط مع Android player.
+                         *
+                         * ما نفرضوش Player معين داخل التطبيق
+                         * في هذه المرحلة، باش نتأكد أن السيرفر
+                         * كيعطي فعلا رابط صالح للتشغيل.
+                         */
+                        val intent = Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse(link)
+                        )
+
+                        startActivity(intent)
+
+                    } catch (e: Exception) {
+
+                        Toast.makeText(
+                            this,
+                            "No video player found.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                },
+
+                errorCallback = { message ->
+
+                    loading.visibility = View.GONE
+
+                    statusText.visibility = View.VISIBLE
+                    statusText.text =
+                        "Playback error: $message"
+
+                    Toast.makeText(
+                        this,
+                        "Playback error: $message",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
+        }
+
         fun showItems(
             title: String,
             names: List<String>,
             emptyMessage: String
         ) {
+
             loading.visibility = View.GONE
             statusText.visibility = View.VISIBLE
 
             if (names.isNotEmpty()) {
 
-                statusText.text = "$title — ${names.size}"
+                statusText.text =
+                    "$title — ${names.size}"
 
                 itemList.adapter = ArrayAdapter(
                     this,
@@ -120,11 +218,65 @@ class DashboardActivity : AppCompatActivity() {
 
                 callback = { channels ->
 
-                    showItems(
-                        title = "Live TV",
-                        names = channels.map { it.name },
-                        emptyMessage = "No Live TV channels were found."
+                    loading.visibility = View.GONE
+                    statusText.visibility = View.VISIBLE
+
+                    if (channels.isEmpty()) {
+
+                        itemList.visibility = View.GONE
+
+                        statusText.text =
+                            "No Live TV channels were found."
+
+                        Toast.makeText(
+                            this,
+                            "No Live TV channels were found.",
+                            Toast.LENGTH_LONG
+                        ).show()
+
+                        return@fetchChannels
+                    }
+
+                    statusText.text =
+                        "Live TV — ${channels.size}"
+
+                    val names =
+                        channels.map { it.name }
+
+                    itemList.adapter = ArrayAdapter(
+                        this,
+                        android.R.layout.simple_list_item_1,
+                        names
                     )
+
+                    itemList.visibility = View.VISIBLE
+
+                    /*
+                     * مهم جدا:
+                     *
+                     * هنا كان المشكل.
+                     *
+                     * قبل كان عندنا فقط أسماء القنوات.
+                     * دابا الضغط على الاسم كيرجع للـChannel
+                     * الأصلي باش ناخدو cmd الحقيقي.
+                     */
+                    itemList.setOnItemClickListener { _, _, position, _ ->
+
+                        if (position < 0 ||
+                            position >= channels.size
+                        ) {
+                            return@setOnItemClickListener
+                        }
+
+                        val channel =
+                            channels[position]
+
+                        playStream(
+                            name = channel.name,
+                            cmd = channel.cmd,
+                            type = "itv"
+                        )
+                    }
                 },
 
                 errorCallback = { message ->
@@ -154,11 +306,59 @@ class DashboardActivity : AppCompatActivity() {
 
                 callback = { movies ->
 
-                    showItems(
-                        title = "Movies",
-                        names = movies.map { it.name },
-                        emptyMessage = "No Movies/VOD were found."
+                    loading.visibility = View.GONE
+                    statusText.visibility = View.VISIBLE
+
+                    if (movies.isEmpty()) {
+
+                        itemList.visibility = View.GONE
+
+                        statusText.text =
+                            "No Movies/VOD were found."
+
+                        Toast.makeText(
+                            this,
+                            "No Movies/VOD were found.",
+                            Toast.LENGTH_LONG
+                        ).show()
+
+                        return@fetchMovies
+                    }
+
+                    statusText.text =
+                        "Movies — ${movies.size}"
+
+                    val names =
+                        movies.map { it.name }
+
+                    itemList.adapter = ArrayAdapter(
+                        this,
+                        android.R.layout.simple_list_item_1,
+                        names
                     )
+
+                    itemList.visibility = View.VISIBLE
+
+                    /*
+                     * تشغيل الفيلم.
+                     */
+                    itemList.setOnItemClickListener { _, _, position, _ ->
+
+                        if (position < 0 ||
+                            position >= movies.size
+                        ) {
+                            return@setOnItemClickListener
+                        }
+
+                        val movie =
+                            movies[position]
+
+                        playStream(
+                            name = movie.name,
+                            cmd = movie.cmd,
+                            type = "vod"
+                        )
+                    }
                 },
 
                 errorCallback = { message ->
@@ -188,11 +388,65 @@ class DashboardActivity : AppCompatActivity() {
 
                 callback = { series ->
 
-                    showItems(
-                        title = "Series",
-                        names = series.map { it.name },
-                        emptyMessage = "No Series were found."
+                    loading.visibility = View.GONE
+                    statusText.visibility = View.VISIBLE
+
+                    if (series.isEmpty()) {
+
+                        itemList.visibility = View.GONE
+
+                        statusText.text =
+                            "No Series were found."
+
+                        Toast.makeText(
+                            this,
+                            "No Series were found.",
+                            Toast.LENGTH_LONG
+                        ).show()
+
+                        return@fetchSeries
+                    }
+
+                    statusText.text =
+                        "Series — ${series.size}"
+
+                    val names =
+                        series.map { it.name }
+
+                    itemList.adapter = ArrayAdapter(
+                        this,
+                        android.R.layout.simple_list_item_1,
+                        names
                     )
+
+                    itemList.visibility = View.VISIBLE
+
+                    /*
+                     * Series مختلفة عن Live TV / Movies:
+                     *
+                     * الضغط على Series خاصو يفتح Seasons
+                     * ثم Episodes.
+                     *
+                     * ما غاديش نخليه يشغل مباشرة هنا لأن
+                     * SeriesItem ما عندوش cmd.
+                     */
+                    itemList.setOnItemClickListener { _, _, position, _ ->
+
+                        if (position < 0 ||
+                            position >= series.size
+                        ) {
+                            return@setOnItemClickListener
+                        }
+
+                        val selectedSeries =
+                            series[position]
+
+                        Toast.makeText(
+                            this,
+                            "Selected: ${selectedSeries.name}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 },
 
                 errorCallback = { message ->
